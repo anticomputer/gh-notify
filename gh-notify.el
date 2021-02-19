@@ -651,11 +651,11 @@ It must not span more than one line but it may contain text properties."
     (let* ((type-mrk
             (cond
              ((eq type 'pullreq)
-              "PR")
+              "P")
              ((eq type 'issue)
-              "IS")
+              "I")
              (t
-              "XX")))
+              "?")))
            (repo-str
             (format "%s %s %s %s #%s"
                     (cond (is-marked
