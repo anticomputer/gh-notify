@@ -668,7 +668,7 @@ It must not span more than one line but it may contain text properties."
             (if (eq gh-notify-default-view :title)
                 (if (string-equal "" title) url title)
               url))
-           (reason-str (format "[%s] " reason)))
+           (reason-str (format " [%s] " reason)))
 
       (setq repo-str (propertize repo-str 'face 'gh-notify-notification-repo-face))
       (setq reason-str (propertize reason-str 'face 'gh-notify-notification-reason-face))
