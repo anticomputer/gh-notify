@@ -169,7 +169,7 @@ This can be toggled by `gh-notify-toggle-timing'.")
   "Show notification titles when equal to :title, URLs otherwise.
 This can be toggled by `gh-notify-toggle-url-view'.")
 
-(defvar gh-notify-default-limit :all
+(defvar gh-notify-reason-limit :all
   "Default display limit.")
 
 (defvar gh-notify-default-repo-limit '()
@@ -219,6 +219,12 @@ Use this to muzzle specific repos that you want to silence across sessions.")
 
 (defvar-local gh-notify--repo-limit '()
   "Repo filter list.")
+
+(defvar-local gh-notify--unread-limit nil
+  "State limit.")
+
+(defvar-local gh-notify--type-limit nil
+  "Type limit.")
 
 (defvar-local gh-notify--repo-index nil
   "Hash table that contains indexed notifications (gh-notify-notification instances).
@@ -419,10 +425,11 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
               (propertize (format "(%s)" total-repos)
                           'help-echo "Total repos"))
        " "
-       (format "by: %s" (if gh-notify--global-ts-sort "date" "repo"))
-       " "
-       (format "%s" gh-notify-default-limit)
-       " "
+       (format "by: %s " (if gh-notify--global-ts-sort "date" "repo"))
+       (when gh-notify--unread-limit
+         (format "%s " gh-notify--unread-limit))
+       (when gh-notify--type-limit (format "type: %s " gh-notify--type-limit))
+       (format "reason: %s " gh-notify-reason-limit)
        ;; if it's active, you already know which repos are in the filter, if not you don't care
        (when gh-notify--repo-limit ":repo ")
        (when gh-notify-show-timing
@@ -476,7 +483,7 @@ Otherwise, a new string is generated and returned by calling
     (define-key map (kbd "C-w")       'gh-notify-copy-url)
     (define-key map (kbd "C-d")       'gh-notify-toggle-global-ts-sort)
     (define-key map (kbd "G")         'gh-notify-forge-refresh)
-    (define-key map (kbd "RET")       'gh-notify-visit-notification)
+    (define-key map (kbd "RET")       'gh-notify-visit-notification) ; browse-url on prefix
     (define-key map (kbd "C-x g")     'gh-notify-forge-visit-repo-at-point)
     (define-key map (kbd "M-m")       'gh-notify-mark-notification)
     (define-key map (kbd "M-M")       'gh-notify-mark-all-notifications)
@@ -487,18 +494,24 @@ Otherwise, a new string is generated and returned by calling
     (define-key map (kbd "\\")        'gh-notify-toggle-url-view)
     ;; Prefix bindings
     (define-key map (kbd "/")          prefix-map)
-    (define-key prefix-map (kbd "m")  'gh-notify-limit-marked)
-    (define-key prefix-map (kbd "'")  'gh-notify-limit-repo)
-    (define-key prefix-map (kbd "\"") 'gh-notify-limit-repo-none)
-    (define-key prefix-map (kbd "u")  'gh-notify-limit-unread)
+    ;; state (read/unread) limit control
+    (define-key prefix-map (kbd "u")  'gh-notify-limit-unread) ; resets unread limit on prefix
+    ;; repo limit control
+    (define-key prefix-map (kbd "'")  'gh-notify-limit-repo) ; pushes by default, pops on prefix
+    (define-key prefix-map (kbd "\"") 'gh-notify-limit-repo-none) ; resets to default repo limit
+    ;; type limit control
+    (define-key prefix-map (kbd "p")  'gh-notify-limit-pr) ; resets type limit on prefix
+    (define-key prefix-map (kbd "i")  'gh-notify-limit-issue) ; resets type limit on prefix
+    ;; reason limit control
+    (define-key prefix-map (kbd "*")  'gh-notify-limit-marked)
     (define-key prefix-map (kbd "a")  'gh-notify-limit-assign)
-    (define-key prefix-map (kbd "i")  'gh-notify-limit-author)
-    (define-key prefix-map (kbd "n")  'gh-notify-limit-mention)
+    (define-key prefix-map (kbd "y")  'gh-notify-limit-author)
+    (define-key prefix-map (kbd "m")  'gh-notify-limit-mention)
     (define-key prefix-map (kbd "t")  'gh-notify-limit-team-mention)
     (define-key prefix-map (kbd "s")  'gh-notify-limit-subscribed)
     (define-key prefix-map (kbd "c")  'gh-notify-limit-comment)
     (define-key prefix-map (kbd "r")  'gh-notify-limit-review-requested)
-    (define-key prefix-map (kbd "/")  'gh-notify-limit-none)
+    (define-key prefix-map (kbd "/")  'gh-notify-limit-none) ; resets reason limit
     map)
   "Keymap for gh-notify-mode.")
 
@@ -556,17 +569,34 @@ Type \\[gh-notify-copy-url] to copy API URL belonging to notification at point.
 
 Limiting notifications:
 
-Gh-notify operates on two layers of result limiting, a repo limit and a reason limit.
+Gh-notify operates on four layers of result limiting, a read-state limit, a type limit, repo limit
+and a reason limit.
+
+These are applied in repo -> state -> type -> reason order, which is generally what you want. This
+allows you to intuitively add and remove limits. Repo narrows to repo scope, state toggles for
+unread/read, type narrows for notification type (issue, pullreq) and finally reason narrows on
+the reason for the notification.
+
+Repo limits:
 
 Type \\[gh-notify-limit-repo] to add a repo to the repo limit. With a prefix argument, remove a
 repo from the repo limit.
 
 Type \\[gh-notify-limit-repo-none] to reset the repo limit to the default limit.
 
+State limits:
+
+Type \\[gh-notify-limit-unread] to limit to unread notifications. With a prefix argument, remove
+unread limit.
+
+Reason limits:
+
 Independently from the repo limit are the various reason limits. These correlate to the
 various notification reason states that may be associated with a GitHub notification.
 
-Type \\[gh-notify-limit-unread] to limit to unread notifications.
+Type \\[gh-notify-limit-issue] to limit to issue notifications.
+
+Type \\[gh-notify-limit-pr] to limit to pull request notifications.
 
 Type \\[gh-notify-limit-assign] to limit to assign notifications.
 
@@ -683,23 +713,35 @@ It must not span more than one line but it may contain text properties."
 
 (defun gh-notify-limit-notification (notification)
   "Limits NOTIFICATION by status.
-Limiting operation depends on `gh-notify-default-limit' and `gh-notify--repo-limit'."
+Limiting operation depends on `gh-notify-reason-limit', `gh-notify-type-limit' and `gh-notify--repo-limit'."
   (let ((repo-id (gh-notify-notification-repo-id notification)))
-    ;; apply repo limits first
-    (when (and (or (member repo-id gh-notify--repo-limit)
-                   (not gh-notify--repo-limit))
-               (not (member repo-id gh-notify-exclude-repo-limit)))
-      (cl-case gh-notify-default-limit
-        (:all t)
-        (:mark (gh-notify-notification-is-marked notification))
-        (:unread (gh-notify-notification-unread notification))
-        (:assign (eq (gh-notify-notification-reason notification) 'assign))
-        (:mention (eq (gh-notify-notification-reason notification) 'mention))
-        (:team_mention (eq (gh-notify-notification-reason notification) 'team_mention))
-        (:subscribed (eq (gh-notify-notification-reason notification) 'subscribed))
-        (:author (eq (gh-notify-notification-reason notification) 'author))
-        (:review-requested (eq (gh-notify-notification-reason notification) 'review_requested))
-        (:comment (eq (gh-notify-notification-reason notification) 'comment))))))
+    ;; 3 pass filter: repo -> type -> reason
+    (when
+        ;; repo limits
+        (and (or (member repo-id gh-notify--repo-limit)
+                 (not gh-notify--repo-limit))
+             (not (member repo-id gh-notify-exclude-repo-limit)))
+      ;;
+      (and
+       ;; state filter
+       (if gh-notify--unread-limit
+           (gh-notify-notification-unread notification)
+         t)
+       ;; type filters
+       (or (eq (gh-notify-notification-type notification) gh-notify--type-limit)
+           (not gh-notify--type-limit))
+       ;; reason filters (layer 3 filter)
+       (cl-case gh-notify-reason-limit
+         (:all t)
+         (:mark (gh-notify-notification-is-marked notification))
+         (:unread (gh-notify-notification-unread notification))
+         (:assign (eq (gh-notify-notification-reason notification) 'assign))
+         (:mention (eq (gh-notify-notification-reason notification) 'mention))
+         (:team_mention (eq (gh-notify-notification-reason notification) 'team_mention))
+         (:subscribed (eq (gh-notify-notification-reason notification) 'subscribed))
+         (:author (eq (gh-notify-notification-reason notification) 'author))
+         (:review-requested (eq (gh-notify-notification-reason notification) 'review_requested))
+         (:comment (eq (gh-notify-notification-reason notification) 'comment)))))))
 
 (defun gh-notify-filter-notification (notification)
   "Filters NOTIFICATION using a case-insensitive match on either URL or title."
@@ -929,70 +971,96 @@ The alist contains (repo-id . notifications) pairs."
   "Only show marked notifications."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (setq-local gh-notify-default-limit :mark)
+  (setq-local gh-notify-reason-limit :mark)
   (gh-notify--filter-notifications))
 
-(defun gh-notify-limit-unread ()
-  "Only show unread notifications."
+(defun gh-notify-limit-type-none ()
+  "Reset type limit to nil."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (setq-local gh-notify-default-limit :unread)
+  (setq-local gh-notify--type-limit nil)
+  (gh-notify--filter-notifications))
+
+(defun gh-notify-limit-issue (P)
+  "Only show issue notifications."
+  (interactive "P")
+  (cl-assert (eq major-mode 'gh-notify-mode) t)
+  (if P (gh-notify-limit-type-none)
+    (progn
+      (setq-local gh-notify--type-limit 'issue)
+      (gh-notify--filter-notifications))))
+
+(defun gh-notify-limit-pr (P)
+  "Only show pull request notifications."
+  (interactive "P")
+  (cl-assert (eq major-mode 'gh-notify-mode) t)
+  (if P (gh-notify-limit-type-none)
+    (progn
+      (setq-local gh-notify--type-limit 'pullreq)
+      (gh-notify--filter-notifications))))
+
+(defun gh-notify-limit-unread (P)
+  "Only show unread notifications."
+  (interactive "P")
+  (cl-assert (eq major-mode 'gh-notify-mode) t)
+  (if P (setq-local gh-notify--unread-limit nil)
+    (setq-local gh-notify--unread-limit :unread))
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-assign ()
   "Only show notifications with reason: assign."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (setq-local gh-notify-default-limit :assign)
+  (setq-local gh-notify-reason-limit :assign)
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-author ()
   "Only show notifications with reason: author."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (setq-local gh-notify-default-limit :author)
+  (setq-local gh-notify-reason-limit :author)
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-mention ()
   "Only show notifications with reason: mention."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (setq-local gh-notify-default-limit :mention)
+  (setq-local gh-notify-reason-limit :mention)
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-team-mention ()
   "Only show notifications with reason: team_mentioned."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (setq-local gh-notify-default-limit :team_mention)
+  (setq-local gh-notify-reason-limit :team_mention)
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-subscribed ()
   "Only show notifications with reason: subscribed."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (setq-local gh-notify-default-limit :subscribed)
+  (setq-local gh-notify-reason-limit :subscribed)
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-comment ()
   "Only show notifications with reason: comment."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (setq-local gh-notify-default-limit :comment)
+  (setq-local gh-notify-reason-limit :comment)
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-review-requested ()
   "Only show notifications with reason: review_requested."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (setq-local gh-notify-default-limit :review-requested)
+  (setq-local gh-notify-reason-limit :review-requested)
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-repo (P)
   "Only show notifications belonging to a specific repo."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (let* ((limit gh-notify-default-limit)
+  (let* ((limit gh-notify-reason-limit)
          (repos  (vconcat (hash-table-keys gh-notify--repo-index))))
     (if P
         ;; delete a repo filter on prefix
@@ -1009,8 +1077,8 @@ The alist contains (repo-id . notifications) pairs."
   "Remove current limit and show all notifications."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (unless (eq gh-notify-default-limit :all)
-    (setq-local gh-notify-default-limit :all)
+  (unless (eq gh-notify-reason-limit :all)
+    (setq-local gh-notify-reason-limit :all)
     (gh-notify--filter-notifications)))
 
 (defun gh-notify-limit-repo-none ()
