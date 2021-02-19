@@ -332,19 +332,12 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
 (defsubst gh-notify--filter-notification (notification)
   (funcall gh-notify-filter-function notification))
 
-(defun gh-notify--filter-notifications (&optional skip-erase)
-  ;; when we're juggling buffer switches sometimes we don't want this to erase
-  ;; when we KNOW we're not changing anything to do with the layout, on a buffer
-  ;; switch the point is no longer active in our buffer and this can result in
-  ;; a lagging point which can introduce workflow stutter as you try to relocate
-  ;; point manually ... so optionally skip erase of the buffer and just redraw
+(defun gh-notify--filter-notifications ()
   (when-let ((current-notification (gh-notify-current-notification)))
     (setq gh-notify--last-notification current-notification))
-
   (when (> (buffer-size) 0)
-    (unless skip-erase
-      (let ((inhibit-read-only t))
-        (erase-buffer)))
+    (let ((inhibit-read-only t))
+      (erase-buffer))
     (clrhash gh-notify--visible-notifications))
 
   ;; resorting * every time we re-filter is not the most optimal of things :P
@@ -387,13 +380,12 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
             (setf (gh-notify-notification-line notification) nil))))
 
        ;; After all notifications have been filtered, determine where to set point
-       (unless skip-erase
-         (when (> line 1)
-           ;; Previously selected notification if it's still visible
-           (if-let ((last-notification gh-notify--last-notification)
-                    (last-line (gh-notify-notification-line last-notification)))
-               (gh-notify-goto-notification last-notification)
-             (goto-char (point-min))))))))
+       (when (> line 1)
+         ;; Previously selected notification if it's still visible
+         (if-let ((last-notification gh-notify--last-notification)
+                  (last-line (gh-notify-notification-line last-notification)))
+             (gh-notify-goto-notification last-notification)
+           (goto-char (point-min)))))))
 
   (force-mode-line-update))
 
