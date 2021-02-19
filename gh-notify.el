@@ -1138,7 +1138,6 @@ If there is a region, only unmark notifications in region."
            (title (gh-notify-notification-title current-notification))
            (reason (gh-notify-notification-reason current-notification))
            (updated (gh-notify-notification-updated current-notification)))
-      (message "%s" forge-obj)
       (if P
           ;; browse url for issue or pull request on prefix
           (gh-notify-browse-notification repo-id type topic)
