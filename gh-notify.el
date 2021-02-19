@@ -940,17 +940,15 @@ The alist contains (repo-id . notifications) pairs."
   (emacsql-with-transaction (forge-db)
     (closql-insert (forge-db) obj t)))
 
-(defun gh-notify--get-state (notification)
-  (let ((type (gh-notify-notification-type notification))
-        (topic (gh-notify-notification-topic notification))
-        (repo (gh-notify-notification-repo notification)))
-    (pcase type
-      ('issue
-       (let ((issue (forge-get-issue repo topic)))
-         (oref issue state)))
-      ('pullreq
-       (let ((pullreq (forge-get-pullreq repo topic)))
-         (oref pullreq state))))))
+(defun gh-notify--get-topic-state (type repo topic)
+  "Get current topic state from forge db."
+  (pcase type
+    ('issue
+     (let ((issue (forge-get-issue repo topic)))
+       (oref issue state)))
+    ('pullreq
+     (let ((pullreq (forge-get-pullreq repo topic)))
+       (oref pullreq state)))))
 
 ;;;
 ;;; Interactive
@@ -962,7 +960,10 @@ The alist contains (repo-id . notifications) pairs."
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((notification (gh-notify-current-notification))
              (state (gh-notify--get-state notification)))
-    (message "state: %s" state)))
+    (let ((type (gh-notify-notification-type notification))
+          (topic (gh-notify-notification-topic notification))
+          (repo (gh-notify-notification-repo notification)))
+      (message "state: %s" (gh-notify--get-topic-state type repo topic)))))
 
 (defun gh-notify-toggle-timing ()
   "Toggle timing information on the header line."
