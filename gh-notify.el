@@ -635,7 +635,7 @@ Note: marking support is currently moot, but will be used to support bulk action
 
 (defun gh-notify-render-notification (notification)
   "Return string representation of NOTIFICATION.
-String is used as is to display NOTIFICATION in *gh-notify-notifications* buffer.
+String is used as is to display NOTIFICATION in *github-notifications* buffer.
 It must not span more than one line but it may contain text properties."
   (let ((repo-id (gh-notify-notification-repo-id notification))
         (id (gh-notify-notification-id notification))
@@ -1190,7 +1190,7 @@ If there is a region, only unmark notifications in region."
 (defun gh-notify ()
   "gh-notify Magit/Forge notification juggling."
   (interactive)
-  (let ((buf (get-buffer-create "*gh-notify-notifications*")))
+  (let ((buf (get-buffer-create "*github-notifications*")))
     (switch-to-buffer buf)
     (unless (eq major-mode 'gh-notify-mode)
       (gh-notify-mode))))
