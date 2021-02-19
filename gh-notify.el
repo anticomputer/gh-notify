@@ -638,24 +638,37 @@ Note: marking support is currently moot, but will be used to support bulk action
 String is used as is to display NOTIFICATION in *github-notifications* buffer.
 It must not span more than one line but it may contain text properties."
   (let ((repo-id (gh-notify-notification-repo-id notification))
+        (type (gh-notify-notification-type notification))
         (id (gh-notify-notification-id notification))
-        (url        (gh-notify-notification-url notification))
-        (title      (gh-notify-notification-title notification))
-        (is-marked  (gh-notify-notification-is-marked notification))
+        (url (gh-notify-notification-url notification))
+        (title (gh-notify-notification-title notification))
+        (is-marked (gh-notify-notification-is-marked notification))
         (unread (gh-notify-notification-unread notification))
         (reason (gh-notify-notification-reason notification))
         (date (gh-notify-notification-date notification))
         (updated (gh-notify-notification-updated notification))
         (topic (gh-notify-notification-topic notification)))
-    (let ((repo-str
-           (if is-marked
-               (format "* %s %s #%s " date repo-id topic)
-             (format "%s %s %s #%s " (if unread "U" "R") date repo-id topic)))
-          (desc-str
-           (if (eq gh-notify-default-view :title)
-               (if (string-equal "" title) url title)
-             url))
-          (reason-str (format "[%s] " reason)))
+    (let* ((type-mrk
+            (cond
+             ((eq type 'pullreq)
+              "PR")
+             ((eq type 'issue)
+              "IS")
+             (t
+              "XX")))
+           (repo-str
+            (format "%s %s %s %s #%s"
+                    (cond (is-marked
+                           "*")
+                          (unread
+                           "U")
+                          ((not unread)
+                           "R")) date type-mrk repo-id topic))
+           (desc-str
+            (if (eq gh-notify-default-view :title)
+                (if (string-equal "" title) url title)
+              url))
+           (reason-str (format "[%s] " reason)))
 
       (setq repo-str (propertize repo-str 'face 'gh-notify-notification-repo-face))
       (setq reason-str (propertize reason-str 'face 'gh-notify-notification-reason-face))
@@ -1132,9 +1145,10 @@ If there is a region, only unmark notifications in region."
   ;; XXX: we just toggle directly on the object ourselves, update the db
   ;; XXX: and re-render our view
   (let ((obj (gh-notify-notification-forge-obj notification)))
-    (oset obj unread-p nil)
-    (gh-notify--insert-forge-obj obj)
-    (gh-notify-retrieve-notifications)))
+    (when (oref obj unread-p)
+      (oset obj unread-p nil)
+      (gh-notify--insert-forge-obj obj)
+      (gh-notify-retrieve-notifications))))
 
 (defun gh-notify-visit-notification (P)
   "Attempt to visit notification at point in some sane way."
@@ -1159,21 +1173,40 @@ If there is a region, only unmark notifications in region."
         ;; is lost in the middle of this logic, this doesn't "break" anything, but
         ;; it can result in a lagging point, so take care of all the state rendering
         ;; first, and THEN trigger the buffer switch
-        (pcase type
-          ('issue
-           ;;(message "handling an issue ...")
-           (gh-notify-mark-notification-read current-notification)
-           (with-temp-buffer
-             (forge-visit (forge-get-issue repo topic))))
-          ('pullreq
-           ;;(message "handling a pull request ...")
-           (gh-notify-mark-notification-read current-notification)
-           (with-temp-buffer
-             (forge-visit (forge-get-pullreq repo topic))))
-          ('commit
-           (message "Commit not handled yet!"))
-          (_
-           (message "Handling something else (%s) %s\n" type title)))))))
+
+        (let ((default-directory "/tmp/gh-notify-smokescreen"))
+
+          ;; XXX: this is a really ugly hack until I figure out how to cleanly make
+          ;; XXX: magit ignore errors when we don't have a local copy of the repo
+          ;; XXX: checked out in our magit paths ... we really don't need a local copy
+          ;; XXX: for interacting with issues and even performing reviews ... e.g.
+          ;; XXX: github-review will work fine with a template magit buffer from a PR
+          ;; XXX: for a non-local repo ...
+
+          ;; XXX: so we throw up a smokescreen with an empty /tmp/ git repo, magit will
+          ;; XXX: fall back to default-directory if it can't find the actual repo ;)
+          ;; XXX: surely there's some non-ganky way to achieve this, but will have to
+          ;; XXX: dig into magit/forge guts a bit more ...
+
+          (unless (file-exists-p default-directory)
+            (make-directory default-directory)
+            (magit-init default-directory))
+
+          (pcase type
+            ('issue
+             ;;(message "handling an issue ...")
+             (gh-notify-mark-notification-read current-notification)
+             (with-demoted-errors "Warning: %S"
+               (forge-visit (forge-get-issue repo topic))))
+            ('pullreq
+             ;;(message "handling a pull request ...")
+             (gh-notify-mark-notification-read current-notification)
+             (with-demoted-errors "Warning: %S"
+               (forge-visit (forge-get-pullreq repo topic))))
+            ('commit
+             (message "Commit not handled yet!"))
+            (_
+             (message "Handling something else (%s) %s\n" type title))))))))
 
 (defun gh-notify-browse-notification (repo-id type topic)
   "Browse to an issue or pr on github.com."
