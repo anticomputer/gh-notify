@@ -481,7 +481,6 @@ Otherwise, a new string is generated and returned by calling
     (define-key map (kbd "C-k")       'gh-notify-reset-filter)
     (define-key map (kbd "C-t")       'gh-notify-toggle-timing)
     (define-key map (kbd "C-w")       'gh-notify-copy-url)
-    (define-key map (kbd "C-d")       'gh-notify-toggle-global-ts-sort)
     (define-key map (kbd "G")         'gh-notify-forge-refresh)
     (define-key map (kbd "RET")       'gh-notify-visit-notification) ; browse-url on prefix
     (define-key map (kbd "C-x g")     'gh-notify-forge-visit-repo-at-point)
@@ -494,6 +493,8 @@ Otherwise, a new string is generated and returned by calling
     (define-key map (kbd "\\")        'gh-notify-toggle-url-view)
     ;; Prefix bindings
     (define-key map (kbd "/")          prefix-map)
+    ;; toggle date/repo sort under this prefix-map for better flow
+    (define-key prefix-map (kbd "d")  'gh-notify-toggle-global-ts-sort) ; date/repo sort toggle
     ;; state (read/unread) limit control
     (define-key prefix-map (kbd "u")  'gh-notify-limit-unread) ; resets unread limit on prefix
     ;; repo limit control
