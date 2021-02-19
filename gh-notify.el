@@ -1174,7 +1174,7 @@ If there is a region, only unmark notifications in region."
         ;; it can result in a lagging point, so take care of all the state rendering
         ;; first, and THEN trigger the buffer switch
 
-        (let ((default-directory "/tmp/gh-notify-smokescreen"))
+        (let ((default-directory "~/.gh-notify-smokescreen"))
 
           ;; XXX: this is a really ugly hack until I figure out how to cleanly make
           ;; XXX: magit ignore errors when we don't have a local copy of the repo
@@ -1183,13 +1183,14 @@ If there is a region, only unmark notifications in region."
           ;; XXX: github-review will work fine with a template magit buffer from a PR
           ;; XXX: for a non-local repo ...
 
-          ;; XXX: so we throw up a smokescreen with an empty /tmp/ git repo, magit will
+          ;; XXX: so we throw up a smokescreen with an empty tmp git repo, magit will
           ;; XXX: fall back to default-directory if it can't find the actual repo ;)
           ;; XXX: surely there's some non-ganky way to achieve this, but will have to
           ;; XXX: dig into magit/forge guts a bit more ...
 
           (unless (file-exists-p default-directory)
             (make-directory default-directory)
+            (set-file-modes default-directory #o700)
             (magit-init default-directory))
 
           (pcase type
