@@ -419,12 +419,12 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
               (propertize (format "(%s)" total-repos)
                           'help-echo "Total repos"))
        " "
-       (format "sort by: %s" (if gh-notify--global-ts-sort "date" "repo"))
+       (format "by: %s" (if gh-notify--global-ts-sort "date" "repo"))
        " "
        (format "%s" gh-notify-default-limit)
        " "
        ;; if it's active, you already know which repos are in the filter, if not you don't care
-       (when gh-notify--repo-limit ":repo-filter ")
+       (when gh-notify--repo-limit ":repo ")
        (when gh-notify-show-timing
          (propertize (format " %.4fs " gh-notify--elapsed-time)
                      'help-echo "Elapsed time for last operation"))
