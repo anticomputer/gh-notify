@@ -214,6 +214,9 @@ Use this to muzzle specific repos that you want to silence across sessions.")
 ;;; Internal API
 ;;;
 
+(defvar gh-notify--current-buffer nil
+  "We have to play weird callback magic with Forge with buffer-local capabilities.")
+
 (defvar-local gh-notify--repo-limit '()
   "Repo filter list.")
 
@@ -329,12 +332,19 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
 (defsubst gh-notify--filter-notification (notification)
   (funcall gh-notify-filter-function notification))
 
-(defun gh-notify--filter-notifications ()
+(defun gh-notify--filter-notifications (&optional skip-erase)
+  ;; when we're juggling buffer switches sometimes we don't want this to erase
+  ;; when we KNOW we're not changing anything to do with the layout, on a buffer
+  ;; switch the point is no longer active in our buffer and this can result in
+  ;; a lagging point which can introduce workflow stutter as you try to relocate
+  ;; point manually ... so optionally skip erase of the buffer and just redraw
   (when-let ((current-notification (gh-notify-current-notification)))
     (setq gh-notify--last-notification current-notification))
+
   (when (> (buffer-size) 0)
-    (let ((inhibit-read-only t))
-      (erase-buffer))
+    (unless skip-erase
+      (let ((inhibit-read-only t))
+        (erase-buffer)))
     (clrhash gh-notify--visible-notifications))
 
   ;; resorting * every time we re-filter is not the most optimal of things :P
@@ -377,12 +387,13 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
             (setf (gh-notify-notification-line notification) nil))))
 
        ;; After all notifications have been filtered, determine where to set point
-       (when (> line 1)
-         ;; Previously selected notification if it's still visible
-         (if-let ((last-notification gh-notify--last-notification)
-                  (last-line (gh-notify-notification-line last-notification)))
-             (gh-notify-goto-notification last-notification)
-           (goto-char (point-min)))))))
+       (unless skip-erase
+         (when (> line 1)
+           ;; Previously selected notification if it's still visible
+           (if-let ((last-notification gh-notify--last-notification)
+                    (last-line (gh-notify-notification-line last-notification)))
+               (gh-notify-goto-notification last-notification)
+             (goto-char (point-min))))))))
 
   (force-mode-line-update))
 
@@ -612,7 +623,8 @@ Note: marking support is currently moot, but will be used to support bulk action
         buffer-read-only t
         header-line-format '(:eval (funcall gh-notify--header-function))
         font-lock-function (lambda (_) nil)
-        gh-notify--repo-limit gh-notify-default-repo-limit)
+        gh-notify--repo-limit gh-notify-default-repo-limit
+        gh-notify--current-buffer (current-buffer))
   (gh-notify--init-caches)
   (gh-notify--with-timing
     (gh-notify--reindex-notifications (gh-notify-get-notifications))
@@ -869,20 +881,15 @@ The alist contains (repo-id . notifications) pairs."
 
 (defun gh-notify-forge-refresh-cb ()
   "Callback for Forge refresh."
-  (message "Forge refreshed!")
-  ;; refresh the gh-notify state
-  (let ((buffer (get-buffer "*gh-notify-notifications*")))
-    (message "Retrieving notifications ...")
-    (when buffer
-      (with-current-buffer buffer
-        (call-interactively #'gh-notify-retrieve-notifications)))))
+  (message "Forge is refreshed!")
+  (with-current-buffer gh-notify--current-buffer
+    (call-interactively #'gh-notify-retrieve-notifications)))
 
 (defun gh-notify--insert-forge-obj (obj)
   "Insert/Replace a forge db object with OBJ."
   ;; replace the updated object ...
   (emacsql-with-transaction (forge-db)
-    (closql-insert (forge-db) obj t))
-  (gh-notify-forge-refresh-cb))
+    (closql-insert (forge-db) obj t)))
 
 ;;;
 ;;; Interactive
@@ -1020,7 +1027,7 @@ The alist contains (repo-id . notifications) pairs."
 (defun gh-notify-retrieve-notifications ()
   "Retrieve and filter all Gh-Notify notifications.
 This wipes and recreates all notification state in Emacs but keeps the current filter
-and limit."
+and limit. It repositions point to the last notification at point when possible."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (gh-notify--with-timing
@@ -1125,13 +1132,24 @@ If there is a region, only unmark notifications in region."
           (forge-visit repo)
         (message "No forge github repo available at point!")))))
 
+(defun gh-notify-mark-notification-read (notification)
+  ;; XXX: Forge DB hack state hack-arounds:
+  ;; XXX: magit/forge will mark a topic as read with GitHub.com itself
+  ;; XXX: but this doesn't translate to the notification objects and
+  ;; XXX: since we don't want to refresh the entire notification history
+  ;; XXX: we just toggle directly on the object ourselves, update the db
+  ;; XXX: and re-render our view
+  (let ((obj (gh-notify-notification-forge-obj notification)))
+    (oset obj unread-p nil)
+    (gh-notify--insert-forge-obj obj)
+    (gh-notify-retrieve-notifications)))
+
 (defun gh-notify-visit-notification (P)
   "Attempt to visit notification at point in some sane way."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((current-notification (gh-notify-current-notification)))
-    (let* ((forge-obj(gh-notify-notification-forge-obj current-notification))
-           (repo-id (gh-notify-notification-repo-id current-notification))
+    (let* ((repo-id (gh-notify-notification-repo-id current-notification))
            (repo (gh-notify-notification-repo current-notification))
            (topic (gh-notify-notification-topic current-notification))
            (type (gh-notify-notification-type current-notification))
@@ -1142,27 +1160,28 @@ If there is a region, only unmark notifications in region."
           ;; browse url for issue or pull request on prefix
           (gh-notify-browse-notification repo-id type topic)
         ;; handle through magit forge otherwise
-        (progn
-          ;; XXX: Forge DB hack state hack-arounds:
-          ;; XXX: magit/forge will mark a topic as read with GitHub.com itself
-          ;; XXX: but this doesn't translate to the notification objects and
-          ;; XXX: since we don't want to refresh the entire notification history
-          ;; XXX: we just toggle directly on the object ourselves update the db
-          (pcase type
-            ('issue
-             ;;(message "handling an issue ...")
-             (forge-visit (forge-get-issue repo topic))
-             (oset forge-obj unread-p nil)
-             (gh-notify--insert-forge-obj forge-obj))
-            ('pullreq
-             ;;(message "handling a pull request ...")
-             (forge-visit (forge-get-pullreq repo topic))
-             (oset forge-obj unread-p nil)
-             (gh-notify--insert-forge-obj forge-obj))
-            ('commit
-             (message "Commit not handled yet!"))
-            (_
-             (message "Handling something else (%s) %s\n" type title))))))))
+
+        ;; important: we want to re-render on read/unread state before switching
+        ;; buffers, that's because we do an auto-magic point reposition based on
+        ;; the last notification state, but on a buffer switch, the active point
+        ;; is lost in the middle of this logic, this doesn't "break" anything, but
+        ;; it can result in a lagging point, so take care of all the state rendering
+        ;; first, and THEN trigger the buffer switch
+        (pcase type
+          ('issue
+           ;;(message "handling an issue ...")
+           (gh-notify-mark-notification-read current-notification)
+           (with-temp-buffer
+             (forge-visit (forge-get-issue repo topic))))
+          ('pullreq
+           ;;(message "handling a pull request ...")
+           (gh-notify-mark-notification-read current-notification)
+           (with-temp-buffer
+             (forge-visit (forge-get-pullreq repo topic))))
+          ('commit
+           (message "Commit not handled yet!"))
+          (_
+           (message "Handling something else (%s) %s\n" type title)))))))
 
 (defun gh-notify-browse-notification (repo-id type topic)
   "Browse to an issue or pr on github.com."
