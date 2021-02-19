@@ -481,6 +481,7 @@ Otherwise, a new string is generated and returned by calling
     (define-key map (kbd "C-k")       'gh-notify-reset-filter)
     (define-key map (kbd "C-t")       'gh-notify-toggle-timing)
     (define-key map (kbd "C-w")       'gh-notify-copy-url)
+    (define-key map (kbd "C-s")       'gh-notify-show-state)
     (define-key map (kbd "G")         'gh-notify-forge-refresh)
     (define-key map (kbd "RET")       'gh-notify-visit-notification) ; browse-url on prefix
     (define-key map (kbd "C-x g")     'gh-notify-forge-visit-repo-at-point)
@@ -939,9 +940,29 @@ The alist contains (repo-id . notifications) pairs."
   (emacsql-with-transaction (forge-db)
     (closql-insert (forge-db) obj t)))
 
+(defun gh-notify--get-state (notification)
+  (let ((type (gh-notify-notification-type notification))
+        (topic (gh-notify-notification-topic notification))
+        (repo (gh-notify-notification-repo notification)))
+    (pcase type
+      ('issue
+       (let ((issue (forge-get-issue repo topic)))
+         (oref issue state)))
+      ('pullreq
+       (let ((pullreq (forge-get-pullreq repo topic)))
+         (oref pullreq state))))))
+
 ;;;
 ;;; Interactive
 ;;;
+
+(defun gh-notify-show-state ()
+  "Show the current state for an issue or pull request associated to a notification."
+  (interactive)
+  (cl-assert (eq major-mode 'gh-notify-mode) t)
+  (when-let ((notification (gh-notify-current-notification))
+             (state (gh-notify--get-state notification)))
+    (message "state: %s" state)))
 
 (defun gh-notify-toggle-timing ()
   "Toggle timing information on the header line."
