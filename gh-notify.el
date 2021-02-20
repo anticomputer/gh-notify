@@ -288,10 +288,10 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
    ;; A hash table indexed by repo-id containing all notifications
    (setf (gethash repo-id gh-notify--repo-index)
          ;; sort notifications by timestamp and then reverse for display
-         (cons notification-count (nreverse
-                                   (cl-sort process-notifications
-                                            #'time-less-p
-                                            :key #'gh-notify-notification-ts))))))
+         (cons notification-count
+               (cl-sort process-notifications
+                        (lambda (a b) (not (time-less-p a b)))
+                        :key #'gh-notify-notification-ts)))))
 
 (defvar-local gh-notify--visible-notifications nil)
 (defvar-local gh-notify--marked-notifications 0)
@@ -378,10 +378,9 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
        ;; but this overrides that behavior and lets you re-sort * by timestamp
        (when gh-notify--global-ts-sort
          (setq ts-sorted-notifications
-               (nreverse
-                (cl-sort ts-sorted-notifications
-                         #'time-less-p
-                         :key #'gh-notify-notification-ts))))
+               (cl-sort ts-sorted-notifications
+                        (lambda (a b) (not (time-less-p a b)))
+                        :key #'gh-notify-notification-ts)))
        ;; filter as a sorted whole list instead of per-repo chunks
        (cl-loop
         for notification in ts-sorted-notifications do
