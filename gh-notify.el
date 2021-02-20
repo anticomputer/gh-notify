@@ -366,7 +366,6 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
      for repo-id being the hash-keys of gh-notify--repo-index
      for repo-notifications = (cdr (gethash repo-id gh-notify--repo-index))
      with line = 1
-     with last-notification = nil
      with ts-sorted-notifications = '()
      do
      ;; collect all notifications into a single list ... concat is faster here
@@ -684,14 +683,12 @@ String is used as is to display NOTIFICATION in *github-notifications* buffer.
 It must not span more than one line but it may contain text properties."
   (let ((repo-id (gh-notify-notification-repo-id notification))
         (type (gh-notify-notification-type notification))
-        (id (gh-notify-notification-id notification))
         (url (gh-notify-notification-url notification))
         (title (gh-notify-notification-title notification))
         (is-marked (gh-notify-notification-is-marked notification))
         (unread (gh-notify-notification-unread notification))
         (reason (gh-notify-notification-reason notification))
         (date (gh-notify-notification-date notification))
-        (updated (gh-notify-notification-updated notification))
         (topic (gh-notify-notification-topic notification))
         (state (gh-notify-notification-state notification)))
     (let* ((state-mrk
@@ -911,7 +908,7 @@ Limiting operation depends on `gh-notify-reason-limit', `gh-notify-type-limit' a
                 ;; first seen timestamp
                 (setq-local gh-notify--forge-last-timestamp updated))))
           ;; return a forge repo-id and notifications for that repo
-          (add-to-list 'results (list repo ns) t))))
+          (push (list repo ns) results))))
     results))
 
 (defun gh-notify-get-notifications ()
@@ -935,7 +932,7 @@ The alist contains (repo-id . notifications) pairs."
            finally
            (progn
              (setq gh-notify--total-notification-count total-notification-count)
-             (message "Retrieved %d notifications across %d repos"
+             (message "Retrieved %d notifications across %d repos%s"
                       total-notification-count
                       repo-count
                       (if (> error-count 0)
@@ -1109,8 +1106,7 @@ The alist contains (repo-id . notifications) pairs."
   "Only show notifications belonging to a specific repo."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (let* ((limit gh-notify-reason-limit)
-         (repos  (vconcat (hash-table-keys gh-notify--repo-index))))
+  (let* ((repos  (vconcat (hash-table-keys gh-notify--repo-index))))
     (if P
         ;; delete a repo filter on prefix
         (when gh-notify--repo-limit
@@ -1276,9 +1272,7 @@ If there is a region, only unmark notifications in region."
            (repo (gh-notify-notification-repo current-notification))
            (topic (gh-notify-notification-topic current-notification))
            (type (gh-notify-notification-type current-notification))
-           (title (gh-notify-notification-title current-notification))
-           (reason (gh-notify-notification-reason current-notification))
-           (updated (gh-notify-notification-updated current-notification)))
+           (title (gh-notify-notification-title current-notification)))
       (if P
           ;; browse url for issue or pull request on prefix
           (gh-notify-browse-notification repo-id type topic)
