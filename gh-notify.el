@@ -165,6 +165,13 @@ filter can be retrieved by calling `gh-notify-active-filter'.")
 
 This can be toggled by `gh-notify-toggle-timing'.")
 
+(defvar gh-notify-show-state nil
+  "Show open/closed/merged state by default.
+
+This requires an additional forge db query for every notification and makes
+inits/refreshes SIGNIFICANTLY less snappy. Disabled by default and recommended
+to use `gh-notify-display-state' via a keybinding instead.")
+
 (defvar gh-notify-default-view :title
   "Show notification titles when equal to :title, URLs otherwise.
 This can be toggled by `gh-notify-toggle-url-view'.")
@@ -207,6 +214,7 @@ Use this to muzzle specific repos that you want to silence across sessions.")
   (reason nil :read-only t)
   (url nil :read-only t)
   (title nil :read-only t)
+  (state nil :read-only t)
   is-marked
   line)
 
@@ -268,7 +276,13 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
              :title (oref forge-notification title)
              ;; we use this for an accurate sort
              :ts ts
-             :date date)))
+             :date date
+             :state (when gh-notify-show-state
+                      (gh-notify--get-topic-state
+                       (oref forge-notification type)
+                       repo
+                       (oref forge-notification topic)))
+             )))
       (push notification process-notifications))
     finally (cl-incf notification-count index))
    ;; A hash table indexed by repo-id containing all notifications
@@ -481,7 +495,7 @@ Otherwise, a new string is generated and returned by calling
     (define-key map (kbd "C-k")       'gh-notify-reset-filter)
     (define-key map (kbd "C-t")       'gh-notify-toggle-timing)
     (define-key map (kbd "C-w")       'gh-notify-copy-url)
-    (define-key map (kbd "C-s")       'gh-notify-show-state)
+    (define-key map (kbd "C-s")       'gh-notify-display-state)
     (define-key map (kbd "G")         'gh-notify-forge-refresh)
     (define-key map (kbd "RET")       'gh-notify-visit-notification) ; browse-url on prefix
     (define-key map (kbd "C-x g")     'gh-notify-forge-visit-repo-at-point)
@@ -679,8 +693,21 @@ It must not span more than one line but it may contain text properties."
         (reason (gh-notify-notification-reason notification))
         (date (gh-notify-notification-date notification))
         (updated (gh-notify-notification-updated notification))
-        (topic (gh-notify-notification-topic notification)))
-    (let* ((type-mrk
+        (topic (gh-notify-notification-topic notification))
+        (state (gh-notify-notification-state notification)))
+    (let* ((state-mrk
+            (if gh-notify-show-state
+                (cond
+                 ((eq state 'open)
+                  "O")
+                 ((eq state 'closed)
+                  "C")
+                 ((eq state 'merged)
+                  "M")
+                 (t
+                  "."))
+              ""))
+           (type-mrk
             (cond
              ((eq type 'pullreq)
               "P")
@@ -689,13 +716,13 @@ It must not span more than one line but it may contain text properties."
              (t
               "?")))
            (repo-str
-            (format "%s %s %s %s #%s"
+            (format "%s %s %s%s %s #%s"
                     (cond (is-marked
                            "*")
                           (unread
                            "U")
                           ((not unread)
-                           "R")) date type-mrk repo-id topic))
+                           "R")) date type-mrk state-mrk repo-id topic))
            (desc-str
             (if (eq gh-notify-default-view :title)
                 (if (string-equal "" title) url title)
@@ -942,24 +969,24 @@ The alist contains (repo-id . notifications) pairs."
 
 (defun gh-notify--get-topic-state (type repo topic)
   "Get current topic state from forge db."
-  (pcase type
-    ('issue
-     (let ((issue (forge-get-issue repo topic)))
-       (oref issue state)))
-    ('pullreq
-     (let ((pullreq (forge-get-pullreq repo topic)))
-       (oref pullreq state)))))
+  (gh-notify--with-timing
+    (pcase type
+      ('issue
+       (let ((issue (forge-get-issue repo topic)))
+         (oref issue state)))
+      ('pullreq
+       (let ((pullreq (forge-get-pullreq repo topic)))
+         (oref pullreq state))))))
 
 ;;;
 ;;; Interactive
 ;;;
 
-(defun gh-notify-show-state ()
+(defun gh-notify-display-state ()
   "Show the current state for an issue or pull request associated to a notification."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (when-let ((notification (gh-notify-current-notification))
-             (state (gh-notify--get-state notification)))
+  (when-let ((notification (gh-notify-current-notification)))
     (let ((type (gh-notify-notification-type notification))
           (topic (gh-notify-notification-topic notification))
           (repo (gh-notify-notification-repo notification)))
