@@ -13,17 +13,13 @@ please see: https://magit.vc/manual/forge.html to get started.
 
 * Getting Started
 
-1) bootstrap your Magit/Forge database with your notifications as per the
-   [[https://magit.vc/manual/forge.html][documentation]] with: M-x forge-pull-notifications RET. This will be
-   slow. You only have to do this once, and can interact with your
-   notifications through gh-notify from that point on.
+1) M-x forge-pull-notifications RET (slow)
+2) M-x gh-notify RET (fast)
+3) M-x describe-mode RET (docs)
 
-2) M-x gh-notify RET. This will be fast and will drop you into gh-notify
-   mode, which presents display limit and search filter based interface to
-   your GitHub Forge notifications.
-
-3) M-x describe-mode RET. This will provide you with the documentation for the
-   mode and the default keybindings.
+You only have to do bootstrap the Forge database in the slow way once, and
+will be able to interact with your notifications through gh-notify from that
+point on which, hopefully, will be a much snappier experience :)
 
 * Dependencies
 
