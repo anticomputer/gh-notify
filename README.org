@@ -1,6 +1,8 @@
 This is gh-notify: A thin ui veneer on top of Magit/Forge porcelain for
 juggling large amounts of GitHub notifications at speed.
 
+#+html:<p align="center"><img src="img/gh-notify-screenshot.png">
+
 It provides a more efficient interface to the Magit/Forge notification
 database suited for rapid searching/narrow/filter based workflows. It also
 improves on Magit/Forge's default notification fetching behavior by
