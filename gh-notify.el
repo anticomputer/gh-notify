@@ -1310,21 +1310,24 @@ If there is a region, only unmark notifications in region."
             (set-file-modes default-directory #o700)
             (magit-init default-directory))
 
-          (pcase type
-            ('issue
-             ;;(message "handling an issue ...")
-             (gh-notify-mark-notification-read current-notification)
-             (with-demoted-errors "Warning: %S"
-               (forge-visit (forge-get-issue repo topic))))
-            ('pullreq
-             ;;(message "handling a pull request ...")
-             (gh-notify-mark-notification-read current-notification)
-             (with-demoted-errors "Warning: %S"
-               (forge-visit (forge-get-pullreq repo topic))))
-            ('commit
-             (message "Commit not handled yet!"))
-            (_
-             (message "Handling something else (%s) %s\n" type title))))))))
+          (save-excursion
+            (pcase type
+              ('issue
+               ;;(message "handling an issue ...")
+               (gh-notify-mark-notification-read current-notification)
+               (with-demoted-errors "Warning: %S"
+                 (with-temp-buffer
+                   (forge-visit (forge-get-issue repo topic)))))
+              ('pullreq
+               ;;(message "handling a pull request ...")
+               (gh-notify-mark-notification-read current-notification)
+               (with-demoted-errors "Warning: %S"
+                 (with-temp-buffer
+                   (forge-visit (forge-get-pullreq repo topic)))))
+              ('commit
+               (message "Commit not handled yet!"))
+              (_
+               (message "Handling something else (%s) %s\n" type title)))))))))
 
 (defun gh-notify-browse-notification (repo-id type topic)
   "Browse to an issue or pr on github.com."
