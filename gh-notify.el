@@ -198,6 +198,9 @@ Repos are in the form \"owner/repo\".
 
 Use this to muzzle specific repos that you want to silence across sessions.")
 
+(defvar gh-notify-smokescreen-path "~/.gh-notify-smokescreen"
+  "The default path for the magit forge-visit smokescreen repo.")
+
 (cl-defstruct (gh-notify-notification
                (:constructor gh-notify-notification-create)
                (:copier nil))
@@ -494,6 +497,8 @@ Otherwise, a new string is generated and returned by calling
     (define-key map (kbd "C-t")       'gh-notify-toggle-timing)
     (define-key map (kbd "C-w")       'gh-notify-copy-url)
     (define-key map (kbd "C-s")       'gh-notify-display-state)
+    (define-key map (kbd "C-i")       'gh-notify-ls-issues-at-point) ; all on prefix, open by default
+    (define-key map (kbd "C-p")       'gh-notify-ls-pullreqs-at-point) ; all on prefix, open by default
     (define-key map (kbd "G")         'gh-notify-forge-refresh)
     (define-key map (kbd "RET")       'gh-notify-visit-notification) ; browse-url on prefix
     (define-key map (kbd "C-x g")     'gh-notify-forge-visit-repo-at-point)
@@ -546,28 +551,28 @@ Otherwise, a new string is generated and returned by calling
     (when updated (gh-notify--filter-notifications))))
 
 (defun gh-notify-mode ()
-  "Major mode for manipulating GitHub notifications as managed through Magit/Forge.
-\\<gh-notify-mode-map>
+  "Major mode for manipulating GitHub notifications as managed through
+Magit/Forge.  \\<gh-notify-mode-map>
 
 Notifications are retrieved from Magit/Forge and displayed in an Emacs buffer,
-one notification per line. Display takes place in date/repo or repo/date ordered
-fashion.
+one notification per line. Display takes place in date/repo or repo/date
+ordered fashion.
 
 Notifications can be further filtered in realtime by a user-specified regular
-expression and limited by certain criteria described below. This mode tries
-to remember point so that it keeps its associated notification selected across
+expression and limited by certain criteria described below. This mode tries to
+remember point so that it keeps its associated notification selected across
 filtering/limiting operations, assuming the notification is visible.
 
-To minimize the feedback loop, this mode does not use the minibuffer
-for input (e.g. when typing a filter regular expression).
-You can start typing immediately and the filter updates, visible on
-the header line.
+To minimize the feedback loop, this mode does not use the minibuffer for input
+(e.g. when typing a filter regular expression).  You can start typing
+immediately and the filter updates, visible on the header line.
 
-Other than regular keys being bound to `gh-notify--self-insert-command',
-the following commands are available:
+Other than regular keys being bound to `gh-notify--self-insert-command', the
+following commands are available:
 
-Type \\[gh-notify-visit-notification] to switch to notification at point in magit/forge. With a prefix
-argument, switch to the topic associated to notification through `browse-url'.
+Type \\[gh-notify-visit-notification] to switch to notification at point in
+magit/forge. With a prefix argument, switch to the topic associated to
+notification through `browse-url'.
 
 Type \\[gh-notify-retrieve-notifications] to retrieve local notifications from magit/forge.
 
@@ -581,32 +586,42 @@ Type \\[gh-notify-toggle-timing] to toggle timing information on the header line
 
 Type \\[gh-notify-copy-url] to copy API URL belonging to notification at point.
 
+Type \\[gh-notify-ls-issues-at-point] to visit any other open issue associated
+to the repo of the notification at point. With a prefix any of all issues
+associated to the repo of the notification at point.
+
+Type \\[gh-notify-ls-pullreqs-at-point] to visit any other open pull request
+associated to the repo of the notification at point. With a prefix any of all
+issues associated to the repo of the notification at point.
+
 Limiting notifications:
 
-Gh-notify operates on four layers of result limiting, a read-state limit, a type limit, repo limit
-and a reason limit.
+Gh-notify operates on four layers of result limiting, a read-state limit, a
+type limit, repo limit and a reason limit.
 
-These are applied in repo -> state -> type -> reason order, which is generally what you want. This
-allows you to intuitively add and remove limits. Repo narrows to repo scope, state toggles for
-unread/read, type narrows for notification type (issue, pullreq) and finally reason narrows on
-the reason for the notification.
+These are applied in repo -> state -> type -> reason order, which is generally
+what you want. This allows you to intuitively add and remove limits. Repo
+narrows to repo scope, state toggles for unread/read, type narrows for
+notification type (issue, pullreq) and finally reason narrows on the reason
+for the notification.
 
 Repo limits:
 
-Type \\[gh-notify-limit-repo] to add a repo to the repo limit. With a prefix argument, remove a
-repo from the repo limit.
+Type \\[gh-notify-limit-repo] to add a repo to the repo limit. With a prefix argument, remove
+a repo from the repo limit.
 
 Type \\[gh-notify-limit-repo-none] to reset the repo limit to the default limit.
 
 State limits:
 
-Type \\[gh-notify-limit-unread] to limit to unread notifications. With a prefix argument, remove
-unread limit.
+Type \\[gh-notify-limit-unread] to limit to unread notifications. With a prefix argument,
+remove unread limit.
 
 Reason limits:
 
-Independently from the repo limit are the various reason limits. These correlate to the
-various notification reason states that may be associated with a GitHub notification.
+Independently from the repo limit are the various reason limits. These
+correlate to the various notification reason states that may be associated
+with a GitHub notification.
 
 Type \\[gh-notify-limit-issue] to limit to issue notifications.
 
@@ -638,13 +653,14 @@ Type \\[gh-notify-mark-notification] to mark notification at point.
 
 Type \\[gh-notify-unmark-notification] to unmark notification at point.
 
-Type \\[gh-notify-mark-all-notifications] to mark all notifications currently visible in Emacs.
-If there is a region, only mark notifications in region.
+Type \\[gh-notify-mark-all-notifications] to mark all notifications currently visible in Emacs. If
+there is a region, only mark notifications in region.
 
 Type \\[gh-notify-unmark-all-notifications] to unmark all notifications currently visible in Emacs.
 If there is a region, only unmark notifications in region.
 
-Note: marking support is currently moot, but will be used to support bulk actions.
+Note: marking support is currently moot, but will be used to support bulk
+actions.
 
 \\{gh-notify-mode-map}"
   (interactive)
@@ -978,6 +994,62 @@ The alist contains (repo-id . notifications) pairs."
 ;;; Interactive
 ;;;
 
+;; modified from forge-read-issue
+(defun gh-notify-ls-pullreqs-at-point (P)
+  "Navigate a list of all pull requests available for the repo associated to notification at point."
+  (interactive "P")
+  (cl-assert (eq major-mode 'gh-notify-mode) t)
+  (when-let ((notification (gh-notify-current-notification)))
+    (let* ((default-directory gh-notify-smokescreen-path)
+           (type (gh-notify-notification-type notification))
+           (repo-id (gh-notify-notification-repo-id notification))
+           (repo (gh-notify-notification-repo notification))
+           (fmt (lambda (obj)
+                  (format "#%s %s"
+                          (oref obj number)
+                          (oref obj title))))
+           ;; list all issues on prefix, only open by default
+           (pullreqs (if P (forge-ls-pullreqs repo)
+                       (forge-ls-pullreqs repo 'open)))
+           (choice (completing-read
+                    (format "%s visit pull request (%s): " repo-id (if P "all" "open"))
+                    (mapcar fmt pullreqs) nil t)))
+      (unless (eq choice "")
+        ;; parse the number we selected back out
+        (let ((topic (and (string-match "^#\\([0-9]+\\) " choice)
+                          (string-to-number (match-string 1 choice)))))
+          (with-demoted-errors "Warning: %S"
+            (with-temp-buffer
+              (forge-visit (forge-get-pullreq repo topic)))))))))
+
+(defun gh-notify-ls-issues-at-point (P)
+  "Navigate a list of all issues available for the repo associated to notification at point."
+  (interactive "P")
+  (cl-assert (eq major-mode 'gh-notify-mode) t)
+  (when-let ((notification (gh-notify-current-notification)))
+    (let* ((default-directory gh-notify-smokescreen-path)
+           (type (gh-notify-notification-type notification))
+           (repo-id (gh-notify-notification-repo-id notification))
+           (repo (gh-notify-notification-repo notification))
+           (fmt (lambda (obj)
+                  (format "#%s %s"
+                          (oref obj number)
+                          (oref obj title))))
+           ;; list all issues on prefix, only open by default
+           (issues (if P (forge-ls-issues repo)
+                     (forge-ls-issues repo 'open)))
+           (choice (completing-read
+                    (format "%s visit issue (%s): " repo-id (if P "all" "open"))
+                    (mapcar fmt issues) nil t)))
+      (unless (eq choice "")
+        (message "%s" choice)
+        ;; parse the number we selected back out
+        (let ((topic (and (string-match "^#\\([0-9]+\\) " choice)
+                          (string-to-number (match-string 1 choice)))))
+          (with-demoted-errors "Warning: %S"
+            (with-temp-buffer
+              (forge-visit (forge-get-issue repo topic)))))))))
+
 (defun gh-notify-display-state ()
   "Show the current state for an issue or pull request associated to a notification."
   (interactive)
@@ -1285,7 +1357,7 @@ If there is a region, only unmark notifications in region."
         ;; it can result in a lagging point, so take care of all the state rendering
         ;; first, and THEN trigger the buffer switch
 
-        (let ((default-directory "~/.gh-notify-smokescreen"))
+        (let ((default-directory gh-notify-smokescreen-path))
 
           ;; XXX: this is a really ugly hack until I figure out how to cleanly make
           ;; XXX: magit ignore errors when we don't have a local copy of the repo
