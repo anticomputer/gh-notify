@@ -1,0 +1,191 @@
+This is gh-notify: A thin ui veneer on top of Magit/Forge porcelain for
+juggling large amounts of GitHub notifications at speed.
+
+It provides a more efficient interface to the Magit/Forge notification
+database suited for rapid searching/narrow/filter based workflows. It also
+improves on Magit/Forge's default notification fetching behavior by
+introducing support for incremental notification fetching, which is a must for
+interactive notification queue workflow iterations.
+
+This code should be plug and play if you already have Magit/Forge set up and
+have fetched notifications for your GitHub account at least once. If not,
+please see: https://magit.vc/manual/forge.html to get started.
+
+* Getting Started
+
+1) bootstrap your Magit/Forge database with your notifications as per the
+   [[https://magit.vc/manual/forge.html][documentation]] with: M-x forge-pull-notifications RET (this will be slow)
+
+You only have to do this once, and can interact with your notifications
+through gh-notify from that point on.
+
+2) M-x gh-notify RET (this will be fast)
+
+This will drop you into gh-notify mode, which presents display limit and
+search filter based interface to your GitHub Forge notifications.
+
+3) M-x describe-mode
+
+This will provide you with the documentation for the mode and the default
+keybindings.
+
+* Dependencies
+
+gh-notify requires the latest versions of Magit/Forge to be installed from
+melpa as per Feb 18, 2021. It interacts with lowlevel Forge APIs quite
+liberally and is sensitive to core API changes in the Forge project. If things
+break for you on versions installed beyond this date, please file an issue.
+
+* Notes
+
+** Forge state recovery
+
+Incremental notification fetching is integrated in a Forge interoperable
+manner and should not conflict with your normal Forge use. It will
+incrementally update the Forge database and retain state across sessions.
+
+If, for whatever reason, you do want a fully clean notification slate, as
+opposed to the incremental/iterative experience provided by gh-notify, you can
+use: M-x forge-pull-notifications RET to restore a clean Forge slate.
+
+** Read/Unread state management
+
+Forge will mark things as read with GitHub.com, but since we do not do full
+refreshes of all notifications, but only get new notifications since the last
+update, these state updates are not available in gh-notify after a forge-visit
+completes.
+
+As a workaround, gh-notify toggles the unread flag for the notification object
+in the Forge database locally to keep unread/read states synced.
+
+** Interacting with notifications for non-local repos
+
+Contrary to popular belief, you do not need local clones of Forge repos just
+to interact with issues and pull requests. Most all of that data is populated
+via the GitHub.com rest and GraphQL API and you can edit/comment/etc. issues
+and even review pull requests with e.g. [[https://github.com/charignon/github-review][github-review]] just fine. In fact, that
+is my personal use case as well.
+
+This is my github-review config:
+
+#+BEGIN_SRC elisp
+;; github-review
+(use-package github-review
+  :quelpa
+  :after forge
+  :bind (("C-x r" . github-review-forge-pr-at-point)
+         :map diff-mode-map ("C-c s" . my/github-review-kill-suggestion))
+  :config
+
+  (defun my/github-review-kill-suggestion ()
+    ;; kill a region of diff+ as a review suggestion template
+    (interactive)
+    (setq deactivate-mark t)
+    (let ((s-region
+           (buffer-substring-no-properties
+            (region-beginning)
+            (region-end))))
+      (kill-new
+       (format "# ```suggestion\n%s\n# ```\n"
+               (replace-regexp-in-string "^\\+" "# " s-region))))))
+#+END_SRC
+
+When opening a Forge PR from gh-notify, you can use M-x
+github-review-forge-pr-at-point RET and everything will work just fine, even
+without a local clone of the target repo.
+
+The only caveat is that magit still expects to be operating in a git
+repository when constructing Forge topic buffers. When a repo does not exist
+locally, magit errors out when the default-directory is not a git repo.
+
+As a workaround, gh-notify creates an empty git repository in
+=~/.gh-notify-smokescreen= and binds that path to default-directory for any
+forge-visit interactions to ensure we can interact with non-local topics.
+
+* Disclaimer
+
+This is highly experimental code, but I do use it in my dayjob at GitHub which
+involves juggling hundreds of notifications across large sets of repos on a
+daily basis. Everything at GitHub happens _through_ GitHub so it is imperative
+to me to have an effective and iterative workflow that lets me rapidly
+sort/narrow/filter and otherwise juggle notifications effectively. Preferably
+without having to step outside of Emacs.
+
+Having said that, if anything breaks in weird ways, or in corner cases that I
+may not be aware of, please file an issue. I'll get to it when I see the
+notification ;)
+
+* Acknowledgements
+
+All of the awesome high-speed filtering is based on code written by Xristos
+<xristos@sdf.org>
+
+He is an absolute monster when it comes to anything involving parentheses and
+remains an inspiration in the software engineering field.
+
+I would also like to acknowledge Jonas Bernoulli for his amazing work on the
+Magit/Forge project.
+
+* Licensing
+
+#+BEGIN_EXAMPLE
+Copyright (C) 2021 bas@anti.computer
+              2020 xristos@sdf.org
+
+All rights reserved
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+  * Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+
+  * Redistributions in binary form must reproduce the above
+    copyright notice, this list of conditions and the following
+    disclaimer in the documentation and/or other materials
+    provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
+This project includes code modified from:
+
+Magit/Forge (https://github.com/magit/forge)
+  Copyright (C) 2018-2021  Jonas Bernoulli
+
+Magit/Forge modifications are subject to the following license terms:
+
+Forge is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 3, or (at your option)
+any later version.
+
+Forge is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
+License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Forge.  If not, see http://www.gnu.org/licenses.
+
+This project includes code modified from:
+
+chrome.el (https://github.com/anticomputer/chrome.el)
+  Copyright (C) 2020 xristos@sdf.org
+                2020 bas@anti.computer
+
+More specifically it repurposes the text filtering and rendering engine
+developed by Xristos <xristos@sdf.org> for chrome.el.
+
+All his original author credits and licensing terms apply.
+#+END_EXAMPLE
