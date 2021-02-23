@@ -1014,7 +1014,7 @@ The alist contains (repo-id . notifications) pairs."
            (choice (completing-read
                     (format "%s visit pull request (%s): " repo-id (if P "all" "open"))
                     (mapcar fmt pullreqs) nil t)))
-      (unless (eq choice "")
+      (unless (string-equal choice "")
         ;; parse the number we selected back out
         (let ((topic (and (string-match "^#\\([0-9]+\\) " choice)
                           (string-to-number (match-string 1 choice)))))
@@ -1041,7 +1041,7 @@ The alist contains (repo-id . notifications) pairs."
            (choice (completing-read
                     (format "%s visit issue (%s): " repo-id (if P "all" "open"))
                     (mapcar fmt issues) nil t)))
-      (unless (eq choice "")
+      (unless (string-equal choice "")
         (message "%s" choice)
         ;; parse the number we selected back out
         (let ((topic (and (string-match "^#\\([0-9]+\\) " choice)
