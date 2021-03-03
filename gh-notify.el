@@ -142,14 +142,14 @@
   :group 'gh-notify)
 
 (defface gh-notify-notification-issue-face
-  '((((class color) (background dark))  (:foreground "#ff6666"))
-    (((class color) (background light)) (:background "#ff6666")))
+  '((((class color) (background dark))  (:foreground "#ff9999"))
+    (((class color) (background light)) (:background "#ff9999")))
   ""
   :group 'gh-notify)
 
 (defface gh-notify-notification-pr-face
-  '((((class color) (background dark))  (:foreground "#ffff66"))
-    (((class color) (background light)) (:background "#ffff66")))
+  '((((class color) (background dark))  (:foreground "#ffff99"))
+    (((class color) (background light)) (:background "#ffff99")))
   ""
   :group 'gh-notify)
 
