@@ -141,6 +141,18 @@
   ""
   :group 'gh-notify)
 
+(defface gh-notify-notification-issue-face
+  '((((class color) (background dark))  (:foreground "#ff6666"))
+    (((class color) (background light)) (:background "#ff6666")))
+  ""
+  :group 'gh-notify)
+
+(defface gh-notify-notification-pr-face
+  '((((class color) (background dark))  (:foreground "#ffff66"))
+    (((class color) (background light)) (:background "#ffff66")))
+  ""
+  :group 'gh-notify)
+
 (defvar gh-notify-render-function #'gh-notify-render-notification
   "Function that renders a notification into a string for display.
 
@@ -707,50 +719,69 @@ It must not span more than one line but it may contain text properties."
         (date (gh-notify-notification-date notification))
         (topic (gh-notify-notification-topic notification))
         (state (gh-notify-notification-state notification)))
-    (let* ((state-mrk
+    (let* ((unread-str
+            (cond (is-marked
+                   "* ")
+                  (unread
+                   "U ")
+                  ((not unread)
+                   "R ")))
+           (date-str (format "%s " date))
+           (type-str
+            (cond
+             ((eq type 'pullreq)
+              "P ")
+             ((eq type 'issue)
+              "I ")
+             (t
+              "? ")))
+           (state-str
             (if gh-notify-show-state
                 (cond
                  ((eq state 'open)
-                  "O")
+                  "O ")
                  ((eq state 'closed)
-                  "C")
+                  "C ")
                  ((eq state 'merged)
-                  "M")
+                  "M ")
                  (t
-                  "."))
+                  ". "))
               ""))
-           (type-mrk
-            (cond
-             ((eq type 'pullreq)
-              "P")
-             ((eq type 'issue)
-              "I")
-             (t
-              "?")))
-           (repo-str
-            (format "%s %s %s%s %s #%s"
-                    (cond (is-marked
-                           "*")
-                          (unread
-                           "U")
-                          ((not unread)
-                           "R")) date type-mrk state-mrk repo-id topic))
+           (repo-str (format "%s #%s " repo-id topic))
+           (reason-str (format "[%s] " reason))
            (desc-str
             (if (eq gh-notify-default-view :title)
                 (if (string-equal "" title) url title)
-              url))
-           (reason-str (format " [%s] " reason)))
+              url)))
 
+      ;; use type as a visual marker for issue|pullreq
+      (pcase type
+        ('pullreq
+         (setq type-str (propertize type-str 'face 'gh-notify-notification-pr-face)))
+        ('issue
+         (setq type-str (propertize type-str 'face 'gh-notify-notification-issue-face))))
+
+      ;; repo face is our default face for most components
+      (setq date-str (propertize date-str 'face 'gh-notify-notification-repo-face))
+      (setq state-str (propertize state-str 'face 'gh-notify-notification-repo-face))
+      (setq unread-str (propertize unread-str 'face 'gh-notify-notification-repo-face))
       (setq repo-str (propertize repo-str 'face 'gh-notify-notification-repo-face))
       (setq reason-str (propertize reason-str 'face 'gh-notify-notification-reason-face))
+
+      ;; use the tail of the line for any mutex global state marker like marked/unread
       (cond
        (is-marked
+        (setq date-str (propertize date-str 'face 'gh-notify-notification-marked-face))
+        (setq unread-str (propertize unread-str 'face 'gh-notify-notification-marked-face))
+        (setq repo-str (propertize repo-str 'face 'gh-notify-notification-marked-face))
         (setq desc-str (propertize desc-str 'face 'gh-notify-notification-marked-face)))
        (unread
+        (setq date-str (propertize date-str 'face 'gh-notify-notification-unread-face))
+        (setq unread-str (propertize unread-str 'face 'gh-notify-notification-unread-face))
         (setq repo-str (propertize repo-str 'face 'gh-notify-notification-unread-face))
         (setq desc-str (propertize desc-str 'face 'gh-notify-notification-unread-face))))
 
-      (concat repo-str reason-str desc-str))))
+      (concat unread-str date-str type-str state-str repo-str reason-str desc-str))))
 
 (defun gh-notify-limit-notification (notification)
   "Limits NOTIFICATION by status.
