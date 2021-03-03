@@ -492,16 +492,16 @@ Otherwise, a new string is generated and returned by calling
      global-map)
     ;; Standard bindings
     (define-key map (kbd "DEL")       'gh-notify--self-insert-command)
-    (define-key map (kbd "C-l")       'gh-notify-retrieve-notifications)
-    (define-key map (kbd "C-k")       'gh-notify-reset-filter)
-    (define-key map (kbd "C-t")       'gh-notify-toggle-timing)
-    (define-key map (kbd "C-w")       'gh-notify-copy-url)
-    (define-key map (kbd "C-s")       'gh-notify-display-state)
-    (define-key map (kbd "C-i")       'gh-notify-ls-issues-at-point) ; all on prefix, open by default
-    (define-key map (kbd "C-p")       'gh-notify-ls-pullreqs-at-point) ; all on prefix, open by default
+    (define-key map (kbd "C-c C-l")   'gh-notify-retrieve-notifications)
+    (define-key map (kbd "C-c C-k")   'gh-notify-reset-filter)
+    (define-key map (kbd "C-c C-t")   'gh-notify-toggle-timing)
+    (define-key map (kbd "C-c C-w")   'gh-notify-copy-url)
+    (define-key map (kbd "C-c C-s")   'gh-notify-display-state)
+    (define-key map (kbd "C-c C-i")   'gh-notify-ls-issues-at-point) ; all on prefix, open by default
+    (define-key map (kbd "C-c C-p")   'gh-notify-ls-pullreqs-at-point) ; all on prefix, open by default
     (define-key map (kbd "G")         'gh-notify-forge-refresh)
     (define-key map (kbd "RET")       'gh-notify-visit-notification) ; browse-url on prefix
-    (define-key map (kbd "C-x g")     'gh-notify-forge-visit-repo-at-point)
+    (define-key map (kbd "C-c C-g")   'gh-notify-forge-visit-repo-at-point)
     (define-key map (kbd "M-m")       'gh-notify-mark-notification)
     (define-key map (kbd "M-M")       'gh-notify-mark-all-notifications)
     (define-key map (kbd "M-u")       'gh-notify-unmark-notification)
