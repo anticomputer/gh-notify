@@ -721,34 +721,34 @@ It must not span more than one line but it may contain text properties."
         (state (gh-notify-notification-state notification)))
     (let* ((unread-str
             (cond (is-marked
-                   "* ")
+                   "*")
                   (unread
-                   "U ")
+                   "U")
                   ((not unread)
-                   "R ")))
-           (date-str (format "%s " date))
+                   "R")))
+           (date-str (format "%s" date))
            (type-str
             (cond
              ((eq type 'pullreq)
-              "P ")
+              "P")
              ((eq type 'issue)
-              "I ")
+              "I")
              (t
-              "? ")))
+              "?")))
            (state-str
             (if gh-notify-show-state
                 (cond
                  ((eq state 'open)
-                  "O ")
+                  "O")
                  ((eq state 'closed)
-                  "C ")
+                  "C")
                  ((eq state 'merged)
-                  "M ")
+                  "M")
                  (t
-                  ". "))
+                  "."))
               ""))
-           (repo-str (format "%s #%s " repo-id topic))
-           (reason-str (format "[%s] " reason))
+           (repo-str (format "%s #%s" repo-id topic))
+           (reason-str (format "[%s]" reason))
            (desc-str
             (if (eq gh-notify-default-view :title)
                 (if (string-equal "" title) url title)
@@ -781,7 +781,13 @@ It must not span more than one line but it may contain text properties."
         (setq repo-str (propertize repo-str 'face 'gh-notify-notification-unread-face))
         (setq desc-str (propertize desc-str 'face 'gh-notify-notification-unread-face))))
 
-      (concat unread-str date-str type-str state-str repo-str reason-str desc-str))))
+      (concat unread-str " "
+              date-str " "
+              type-str " "
+              state-str (if (string-equal state-str "") "" " ")
+              repo-str " "
+              reason-str " "
+              desc-str))))
 
 (defun gh-notify-limit-notification (notification)
   "Limits NOTIFICATION by status.
