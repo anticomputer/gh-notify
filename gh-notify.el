@@ -213,6 +213,11 @@ Use this to muzzle specific repos that you want to silence across sessions.")
 (defvar gh-notify-smokescreen-path "~/.gh-notify-smokescreen"
   "The default path for the magit forge-visit smokescreen repo.")
 
+(defvar gh-notify-redraw-on-visit t
+  "Automatically redraw notifications on forge-visit.
+
+If you prefer to manually refresh notification display state after visits, set this to nil.")
+
 (cl-defstruct (gh-notify-notification
                (:constructor gh-notify-notification-create)
                (:copier nil))
@@ -1370,7 +1375,8 @@ If there is a region, only unmark notifications in region."
     (when (oref obj unread-p)
       (oset obj unread-p nil)
       (gh-notify--insert-forge-obj obj)
-      (gh-notify-retrieve-notifications))))
+      (when gh-notify-redraw-on-visit
+        (gh-notify-retrieve-notifications)))))
 
 (defun gh-notify-visit-notification (P)
   "Attempt to visit notification at point in some sane way."
