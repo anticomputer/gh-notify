@@ -1425,13 +1425,15 @@ If there is a region, only unmark notifications in region."
              (gh-notify-mark-notification-read current-notification)
              (with-demoted-errors "Warning: %S"
                (with-temp-buffer
-                 (forge-visit (forge-get-issue repo topic)))))
+                 (forge-visit (forge-get-issue repo topic))
+                 (forge-pull-topic topic))))
             ('pullreq
              ;;(message "handling a pull request ...")
              (gh-notify-mark-notification-read current-notification)
              (with-demoted-errors "Warning: %S"
                (with-temp-buffer
-                 (forge-visit (forge-get-pullreq repo topic)))))
+                 (forge-visit (forge-get-pullreq repo topic))
+                 (forge-pull-topic topic))))
             ('commit
              (message "Commit not handled yet!"))
             (_
