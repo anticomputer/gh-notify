@@ -218,6 +218,11 @@ Use this to muzzle specific repos that you want to silence across sessions.")
 
 If you prefer to manually refresh notification display state after visits, set this to nil.")
 
+(defvar gh-notify-browse-url-default-browser t
+  "Use default browser to browse GitHub topics.
+
+Set this to t if you a non-GitHub compatible browser like eww for browse-url.")
+
 (cl-defstruct (gh-notify-notification
                (:constructor gh-notify-notification-create)
                (:copier nil))
@@ -589,7 +594,8 @@ following commands are available:
 
 Type \\[gh-notify-visit-notification] to switch to notification at point in
 magit/forge. With a prefix argument, switch to the topic associated to
-notification through `browse-url'.
+notification through `browse-url' or `browse-url-default-browser' depending
+on the value of `github-notify-browse-url-default-browser'.
 
 Type \\[gh-notify-retrieve-notifications] to retrieve local notifications from magit/forge.
 
@@ -1448,7 +1454,9 @@ If there is a region, only unmark notifications in region."
                            ('issue "issues")
                            ('pullreq "pull"))
                          topic)))
-        (browse-url url))
+        (if gh-notify-browse-url-default-browser
+            (browse-url-default-browser url)
+          (browse-url url)))
     (message "Can't browse to this notification!")))
 
 (defun gh-notify ()
