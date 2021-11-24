@@ -12,7 +12,7 @@
 ;;
 ;; Maintainer: Bas Alberts <bas@anti.computer>
 ;; URL: https://github.com/anticomputer/gh-notify
-;; Package-Requires: ((emacs "27.1") (magit "3.3.0") (forge "0.3.0"))
+;; Package-Requires: ((emacs "27.1") (magit "3.0.0") (forge "0.2.0"))
 ;; Keywords: comm
 
 ;; Redistribution and use in source and binary forms, with or without
