@@ -5,8 +5,8 @@
 ;;
 ;; All rights reserved
 
-;; Modified: 2021-02-18
-;; Version: 0.1rc1
+;; Modified: 2021-11-23
+;; Version: 0.1
 ;; Author: Bas Alberts <bas@anti.computer>
 ;;         xristos <xristos@sdf.org>
 ;;
@@ -76,13 +76,13 @@
 ;; large amounts of GitHub notifications.
 ;;
 ;; It provides a more efficient interface to the Magit/Forge notification database
-;; suited for rapid searching/narrow/filter based workflows. It also improves on
+;; suited for rapid searching/narrow/filter based workflows.  It also improves on
 ;; Magit/Forge's default notification fetching behavior by introducing support for
 ;; incremental notification fetching, which is a must for interactive notification
 ;; queue workflow iterations.
 ;;
 ;; This code should be plug and play if you already have Magit/Forge set up and have
-;; fetched notifications for your GitHub account at least once. If not, please see:
+;; fetched notifications for your GitHub account at least once.  If not, please see:
 ;; https://magit.vc/manual/forge.html to get started.
 ;;
 ;; Note: this requires the latest versions of magit/forge to be installed from melpa
@@ -108,7 +108,7 @@
 (require 'url-util)
 
 (defgroup gh-notify nil
-  "gh-notify GitHub magit/forge notifications control."
+  "GitHub magit/forge notifications control."
   :group 'comm)
 
 (defface gh-notify-notification-filter-face
@@ -120,37 +120,37 @@
 (defface gh-notify-notification-marked-face
   '((((class color) (background dark))  (:foreground "#ffaaff"))
     (((class color) (background light)) (:foreground "#d70008")))
-  ""
+  "Marked face."
   :group 'gh-notify)
 
 (defface gh-notify-notification-unread-face
   '((((class color) (background dark))  (:weight ultra-bold))
     (((class color) (background light)) (:weight ultra-bold)))
-  ""
+  "Unread face."
   :group 'gh-notify)
 
 (defface gh-notify-notification-repo-face
   '((((class color) (background dark))  (:weight ultra-light))
     (((class color) (background light)) (:weight ultra-light)))
-  ""
+  "Repo face."
   :group 'gh-notify)
 
 (defface gh-notify-notification-reason-face
   '((((class color) (background dark))  (:foreground "#aaffaa"))
     (((class color) (background light)) (:background "#5faf00")))
-  ""
+  "Reason face."
   :group 'gh-notify)
 
 (defface gh-notify-notification-issue-face
   '((((class color) (background dark))  (:foreground "#ff9999"))
     (((class color) (background light)) (:background "#ff9999")))
-  ""
+  "Issue face."
   :group 'gh-notify)
 
 (defface gh-notify-notification-pr-face
   '((((class color) (background dark))  (:foreground "#ffff99"))
     (((class color) (background light)) (:background "#ffff99")))
-  ""
+  "PR face."
   :group 'gh-notify)
 
 (defvar gh-notify-render-function #'gh-notify-render-notification
@@ -169,7 +169,7 @@ return t if the notification is included in the limit, nil otherwise.")
   "Function that filters visible notifications based on a user-typed regexp.
 
 Function must accept one argument, gh-notify-notification instance, and
-return t if the notification passes the filter, nil otherwise. The current
+return t if the notification passes the filter, nil otherwise.  The current
 filter can be retrieved by calling `gh-notify-active-filter'.")
 
 (defvar gh-notify-show-timing t
@@ -181,7 +181,7 @@ This can be toggled by `gh-notify-toggle-timing'.")
   "Show open/closed/merged state by default.
 
 This requires an additional forge db query for every notification and makes
-inits/refreshes SIGNIFICANTLY less snappy. Disabled by default and recommended
+inits/refreshes SIGNIFICANTLY less snappy.  Disabled by default and recommended
 to use `gh-notify-display-state' via a keybinding instead.")
 
 (defvar gh-notify-default-view :title
@@ -200,8 +200,8 @@ This will be your repo limit reset state to the exclusion of anything else.
 and should only be used if you have a lot of permanent-noise from repositories
 you do not care about for the long term.
 
-Most people will want to keep this list empty and use `gh-notify-exclude-repo-limit'
-instead.")
+Most people will want to keep this list empty and use
+`gh-notify-exclude-repo-limit' instead.")
 
 (defvar gh-notify-exclude-repo-limit '()
   "List of repos to exclude from notifications display.
@@ -211,10 +211,10 @@ Repos are in the form \"owner/repo\".
 Use this to muzzle specific repos that you want to silence across sessions.")
 
 (defvar gh-notify-smokescreen-path "~/.gh-notify-smokescreen"
-  "The default path for the magit forge-visit smokescreen repo.")
+  "The default path for the magit `forge-visit' smokescreen repo.")
 
 (defvar gh-notify-redraw-on-visit t
-  "Automatically redraw notifications on forge-visit.
+  "Automatically redraw notifications on `forge-visit'.
 
 If you prefer to manually refresh notification display state after visits, set this to nil.")
 
@@ -255,10 +255,9 @@ If you prefer to manually refresh notification display state after visits, set t
   "Type limit.")
 
 (defvar-local gh-notify--repo-index nil
-  "Hash table that contains indexed notifications (gh-notify-notification instances).
+  "Hash table that contains indexed `gh-notify' notifications.
 
-Keys are repos, strings of form \"owner/repo\".
-Values are conses of form:
+Keys are repos, strings of form \"owner/repo\".  Values are conses of form:
 
   (notification-count . notification-list)")
 
@@ -301,8 +300,7 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
                       (gh-notify--get-topic-state
                        (oref forge-notification type)
                        repo
-                       (oref forge-notification topic)))
-             )))
+                       (oref forge-notification topic))))))
       (push notification process-notifications))
     finally (cl-incf notification-count index))
    ;; A hash table indexed by repo-id containing all notifications
@@ -318,6 +316,7 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
 (defvar-local gh-notify--total-notification-count 0)
 
 (defun gh-notify--init-caches ()
+  "Init caches."
   (setq gh-notify--repo-index (make-hash-table :test 'equal)
         gh-notify--visible-notifications (make-hash-table)))
 
@@ -325,10 +324,12 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
 (defvar-local gh-notify--elapsed-time nil)
 
 (defun gh-notify--start-timer ()
+  "Start timer."
   (unless gh-notify--start-time
     (setq gh-notify--start-time (current-time))))
 
 (defun gh-notify--stop-timer ()
+  "Stop timer."
   (when gh-notify--start-time
     (setq gh-notify--elapsed-time
           (float-time (time-subtract
@@ -337,6 +338,7 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
           gh-notify--start-time nil)))
 
 (cl-defmacro gh-notify--with-timing (&body body)
+  "Time BODY."
   (declare (indent defun))
   `(unwind-protect
        (progn
@@ -346,6 +348,7 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
      (setq gh-notify--header-update t)))
 
 (defun gh-notify--message (format-string &rest args)
+  "Message ARGS as FORMAT-STRING."
   (let ((message-truncate-lines t))
     (message "gh-notify: %s" (apply #'format format-string args))))
 
@@ -358,21 +361,26 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
 (defvar-local gh-notify--global-ts-sort t)
 
 (defsubst gh-notify--goto-line (line)
+  "Goto LINE."
   (goto-char (point-min))
   (forward-line (1- line)))
 
 (defsubst gh-notify--render-notification (notification &optional skip-goto)
+  "Render NOTIFICATION optionally SKIP-GOTO."
   (unless skip-goto (gh-notify-goto-notification notification))
   (delete-region (line-beginning-position) (line-end-position))
   (insert (funcall gh-notify-render-function notification)))
 
 (defsubst gh-notify--limit-notification (notification)
+  "Limit NOTIFICATION."
   (funcall gh-notify-limit-function notification))
 
 (defsubst gh-notify--filter-notification (notification)
+  "Filter NOTIFICATION."
   (funcall gh-notify-filter-function notification))
 
 (defun gh-notify--filter-notifications ()
+  "Filter notifications."
   (when-let ((current-notification (gh-notify-current-notification)))
     (setq gh-notify--last-notification current-notification))
   (when (> (buffer-size) 0)
@@ -518,11 +526,11 @@ Otherwise, a new string is generated and returned by calling
     (define-key map (kbd "C-c C-p")   'gh-notify-ls-pullreqs-at-point) ; all on prefix, open by default
     (define-key map (kbd "G")         'gh-notify-forge-refresh)
     (define-key map (kbd "RET")       'gh-notify-visit-notification) ; browse-url on prefix
-    (define-key map (kbd "C-c C-g")   'gh-notify-forge-visit-repo-at-point)
-    (define-key map (kbd "M-m")       'gh-notify-mark-notification)
-    (define-key map (kbd "M-M")       'gh-notify-mark-all-notifications)
-    (define-key map (kbd "M-u")       'gh-notify-unmark-notification)
-    (define-key map (kbd "M-U")       'gh-notify-unmark-all-notifications)
+    (define-key map (kbd "C-c C-v")   'gh-notify-forge-visit-repo-at-point)
+    ;; (define-key map (kbd "M-m")       'gh-notify-mark-notification)
+    ;; (define-key map (kbd "M-M")       'gh-notify-mark-all-notifications)
+    ;; (define-key map (kbd "M-u")       'gh-notify-unmark-notification)
+    ;; (define-key map (kbd "M-U")       'gh-notify-unmark-all-notifications)
     (define-key map (kbd "C-<up>")    'previous-line)
     (define-key map (kbd "C-<down>")  'next-line)
     (define-key map (kbd "\\")        'gh-notify-toggle-url-view)
@@ -549,9 +557,10 @@ Otherwise, a new string is generated and returned by calling
     (define-key prefix-map (kbd "r")  'gh-notify-limit-review-requested)
     (define-key prefix-map (kbd "/")  'gh-notify-limit-none) ; resets reason limit
     map)
-  "Keymap for gh-notify-mode.")
+  "Keymap for `gh-notify-mode'.")
 
 (defun gh-notify--self-insert-command ()
+  "Insert command."
   (interactive)
   (let ((event last-input-event)
         updated)
@@ -568,27 +577,28 @@ Otherwise, a new string is generated and returned by calling
     (when updated (gh-notify--filter-notifications))))
 
 (defun gh-notify-mode ()
-  "Major mode for manipulating GitHub notifications as managed through
-Magit/Forge.  \\<gh-notify-mode-map>
+  "Major mode for manipulating GitHub notifications through Magit/Forge.
+
+\\<gh-notify-mode-map>
 
 Notifications are retrieved from Magit/Forge and displayed in an Emacs buffer,
-one notification per line. Display takes place in date/repo or repo/date
+one notification per line.  Display takes place in date/repo or repo/date
 ordered fashion.
 
 Notifications can be further filtered in realtime by a user-specified regular
-expression and limited by certain criteria described below. This mode tries to
+expression and limited by certain criteria described below.  This mode tries to
 remember point so that it keeps its associated notification selected across
 filtering/limiting operations, assuming the notification is visible.
 
 To minimize the feedback loop, this mode does not use the minibuffer for input
-(e.g. when typing a filter regular expression).  You can start typing
+\(e.g.  when typing a filter regular expression).  You can start typing
 immediately and the filter updates, visible on the header line.
 
 Other than regular keys being bound to `gh-notify--self-insert-command', the
 following commands are available:
 
 Type \\[gh-notify-visit-notification] to switch to notification at point in
-magit/forge. With a prefix argument, switch to the topic associated to
+magit/forge.  With a prefix argument, switch to the topic associated to
 notification through `browse-url'.
 
 Type \\[gh-notify-retrieve-notifications] to retrieve local notifications from magit/forge.
@@ -604,11 +614,11 @@ Type \\[gh-notify-toggle-timing] to toggle timing information on the header line
 Type \\[gh-notify-copy-url] to copy API URL belonging to notification at point.
 
 Type \\[gh-notify-ls-issues-at-point] to visit any other open issue associated
-to the repo of the notification at point. With a prefix any of all issues
+to the repo of the notification at point.  With a prefix any of all issues
 associated to the repo of the notification at point.
 
 Type \\[gh-notify-ls-pullreqs-at-point] to visit any other open pull request
-associated to the repo of the notification at point. With a prefix any of all
+associated to the repo of the notification at point.  With a prefix any of all
 issues associated to the repo of the notification at point.
 
 Limiting notifications:
@@ -617,26 +627,26 @@ Gh-notify operates on four layers of result limiting, a read-state limit, a
 type limit, repo limit and a reason limit.
 
 These are applied in repo -> state -> type -> reason order, which is generally
-what you want. This allows you to intuitively add and remove limits. Repo
+what you want.  This allows you to intuitively add and remove limits.  Repo
 narrows to repo scope, state toggles for unread/read, type narrows for
 notification type (issue, pullreq) and finally reason narrows on the reason
 for the notification.
 
 Repo limits:
 
-Type \\[gh-notify-limit-repo] to add a repo to the repo limit. With a prefix argument, remove
+Type \\[gh-notify-limit-repo] to add a repo to the repo limit.  With a prefix argument, remove
 a repo from the repo limit.
 
 Type \\[gh-notify-limit-repo-none] to reset the repo limit to the default limit.
 
 State limits:
 
-Type \\[gh-notify-limit-unread] to limit to unread notifications. With a prefix argument,
+Type \\[gh-notify-limit-unread] to limit to unread notifications.  With a prefix argument,
 remove unread limit.
 
 Reason limits:
 
-Independently from the repo limit are the various reason limits. These
+Independently from the repo limit are the various reason limits.  These
 correlate to the various notification reason states that may be associated
 with a GitHub notification.
 
@@ -670,7 +680,7 @@ Type \\[gh-notify-mark-notification] to mark notification at point.
 
 Type \\[gh-notify-unmark-notification] to unmark notification at point.
 
-Type \\[gh-notify-mark-all-notifications] to mark all notifications currently visible in Emacs. If
+Type \\[gh-notify-mark-all-notifications] to mark all notifications currently visible in Emacs.  If
 there is a region, only mark notifications in region.
 
 Type \\[gh-notify-unmark-all-notifications] to unmark all notifications currently visible in Emacs.
@@ -868,10 +878,12 @@ Limiting operation depends on `gh-notify-reason-limit', `gh-notify-type-limit' a
 ;; start from.
 
 (defvar-local gh-notify--forge-last-timestamp nil
-  "The most recently updated notification gh-notify knows about.")
+  "The most recently updated notification `gh-notify' knows about.")
 
 (cl-defmethod gh-notify-forge--pull-notifications
   ((_class (subclass forge-github-repository)) githost &optional callback)
+  "An incremental version to retrieve `forge--pull-notifications' from GITHOST.
+Optionally provide a CALLBACK."
   ;; The GraphQL API doesn't support notifications and also likes to
   ;; timeout for handcrafted requests, forcing us to perform a major
   ;; rain dance.
@@ -950,6 +962,7 @@ Limiting operation depends on `gh-notify-reason-limit', `gh-notify-type-limit' a
         (cb)))))
 
 (defun gh-notify--forge-get-notifications ()
+  "Get forge notifications."
   (let ((results '()))
     (when-let ((ns (forge--list-notifications-all)))
       (pcase-dolist (`(,_ . ,ns) (--group-by (oref it repository) ns))
@@ -1022,7 +1035,7 @@ The alist contains (repo-id . notifications) pairs."
     (closql-insert (forge-db) obj t)))
 
 (defun gh-notify--get-topic-state (type repo topic)
-  "Get current topic state from forge db."
+  "Get current topic state of TYPE from forge REPO db for TOPIC."
   (gh-notify--with-timing
     (pcase type
       ('issue
@@ -1038,7 +1051,7 @@ The alist contains (repo-id . notifications) pairs."
 
 ;; modified from forge-read-issue
 (defun gh-notify-ls-pullreqs-at-point (P)
-  "Navigate a list of all pull requests available for the repo associated to notification at point."
+  "Navigate a list of open pull requests available for the repo associated to notification at point, all pull request on prefix P."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((notification (gh-notify-current-notification)))
@@ -1065,7 +1078,7 @@ The alist contains (repo-id . notifications) pairs."
               (forge-visit (forge-get-pullreq repo topic)))))))))
 
 (defun gh-notify-ls-issues-at-point (P)
-  "Navigate a list of all issues available for the repo associated to notification at point."
+  "Navigate a list of open issues available for the repo associated to notification at point, all issues on prefix P."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((notification (gh-notify-current-notification)))
@@ -1142,7 +1155,7 @@ The alist contains (repo-id . notifications) pairs."
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-issue (P)
-  "Only show issue notifications."
+  "Only show issue notifications, remove limit on prefix P."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (if P (gh-notify-limit-type-none)
@@ -1151,7 +1164,7 @@ The alist contains (repo-id . notifications) pairs."
       (gh-notify--filter-notifications))))
 
 (defun gh-notify-limit-pr (P)
-  "Only show pull request notifications."
+  "Only show pull request notifications, remove limit on prefix P."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (if P (gh-notify-limit-type-none)
@@ -1160,7 +1173,7 @@ The alist contains (repo-id . notifications) pairs."
       (gh-notify--filter-notifications))))
 
 (defun gh-notify-limit-unread (P)
-  "Only show unread notifications."
+  "Only show unread notifications, remove limit on prefix P."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (if P (setq-local gh-notify--unread-limit nil)
@@ -1217,7 +1230,7 @@ The alist contains (repo-id . notifications) pairs."
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-repo (P)
-  "Only show notifications belonging to a specific repo."
+  "Only show notifications belonging to a specific repo, remove filter on prefix P."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (let* ((repos  (vconcat (hash-table-keys gh-notify--repo-index))))
@@ -1258,8 +1271,9 @@ The alist contains (repo-id . notifications) pairs."
 
 (defun gh-notify-retrieve-notifications ()
   "Retrieve and filter all Gh-Notify notifications.
-This wipes and recreates all notification state in Emacs but keeps the current filter
-and limit. It repositions point to the last notification at point when possible."
+This wipes and recreates all notification state in Emacs but keeps the current
+filter and limit.  It repositions point to the last notification at point when
+possible."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (gh-notify--with-timing
@@ -1295,7 +1309,7 @@ and limit. It repositions point to the last notification at point when possible.
 ;;       (gh-notify-retrieve-notifications))))
 
 (defun gh-notify-mark-notification (&optional notification)
-  "Mark notification at point."
+  "Mark NOTIFICATION at point."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (let ((move-forward (if notification nil t)))
@@ -1311,7 +1325,7 @@ and limit. It repositions point to the last notification at point when possible.
       (when move-forward (forward-line)))))
 
 (defun gh-notify-unmark-notification (&optional notification)
-  "Unmark notification at point."
+  "Unmark NOTIFICATION at point."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (let ((move-forward (if notification nil t)))
@@ -1354,6 +1368,7 @@ If there is a region, only unmark notifications in region."
   (gh-notify-do-visible-notifications #'gh-notify-unmark-notification))
 
 (defun gh-notify-forge-visit-repo-at-point ()
+  "Visit repo at point."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((current-notification (gh-notify-current-notification)))
@@ -1365,6 +1380,7 @@ If there is a region, only unmark notifications in region."
         (message "No forge github repo available at point!")))))
 
 (defun gh-notify-mark-notification-read (notification)
+  "Mark NOTIFICATION as read."
   ;; XXX: Forge DB hack state hack-arounds:
   ;; XXX: magit/forge will mark a topic as read with GitHub.com itself
   ;; XXX: but this doesn't translate to the notification objects and
@@ -1379,7 +1395,7 @@ If there is a region, only unmark notifications in region."
         (gh-notify-retrieve-notifications)))))
 
 (defun gh-notify-visit-notification (P)
-  "Attempt to visit notification at point in some sane way."
+  "Attempt to visit notification at point in some sane way, browse issue or PR on prefix P."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((current-notification (gh-notify-current-notification)))
@@ -1440,7 +1456,7 @@ If there is a region, only unmark notifications in region."
              (message "Handling something else (%s) %s\n" type title))))))))
 
 (defun gh-notify-browse-notification (repo-id type topic)
-  "Browse to an issue or pr on github.com."
+  "Browse to a TOPIC of TYPE on GitHub REPO-ID."
   (if (member type '(issue pullreq))
       (let ((url (format "https://github.com/%s/%s/%s"
                          repo-id
@@ -1452,7 +1468,7 @@ If there is a region, only unmark notifications in region."
     (message "Can't browse to this notification!")))
 
 (defun gh-notify ()
-  "gh-notify Magit/Forge notification juggling."
+  "Magit/Forge notification juggling."
   (interactive)
   (let ((buf (get-buffer-create "*github-notifications*")))
     (switch-to-buffer buf)
