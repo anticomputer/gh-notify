@@ -337,6 +337,8 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
                        gh-notify--start-time))
           gh-notify--start-time nil)))
 
+(defvar-local gh-notify--header-update nil)
+
 (cl-defmacro gh-notify--with-timing (&body body)
   "Time BODY."
   (declare (indent defun))
@@ -481,7 +483,6 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
                              'help-echo "Search filter"
                              'face 'gh-notify-notification-filter-face)))))))
 
-(defvar-local gh-notify--header-update nil)
 (defvar-local gh-notify--header-cache nil)
 
 (defun gh-notify--header ()
@@ -1056,7 +1057,6 @@ The alist contains (repo-id . notifications) pairs."
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((notification (gh-notify-current-notification)))
     (let* ((default-directory gh-notify-smokescreen-path)
-           (type (gh-notify-notification-type notification))
            (repo-id (gh-notify-notification-repo-id notification))
            (repo (gh-notify-notification-repo notification))
            (fmt (lambda (obj)
@@ -1083,7 +1083,6 @@ The alist contains (repo-id . notifications) pairs."
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((notification (gh-notify-current-notification)))
     (let* ((default-directory gh-notify-smokescreen-path)
-           (type (gh-notify-notification-type notification))
            (repo-id (gh-notify-notification-repo-id notification))
            (repo (gh-notify-notification-repo notification))
            (fmt (lambda (obj)
