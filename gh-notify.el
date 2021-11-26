@@ -1054,8 +1054,8 @@ The alist contains (repo-id . notifications) pairs."
 
 ;; modified from forge-read-issue
 (defun gh-notify-ls-pullreqs-at-point (P)
-  "Navigate a list of open pull requests available for the repo associated to
-notification at point, all pull request on prefix P."
+  "Navigate a list of open pull requests available for notification at point.
+All pull request on prefix P."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((notification (gh-notify-current-notification)))
@@ -1081,8 +1081,8 @@ notification at point, all pull request on prefix P."
               (forge-visit (forge-get-pullreq repo topic)))))))))
 
 (defun gh-notify-ls-issues-at-point (P)
-  "Navigate a list of open issues available for the repo associated to
-notification at point, all issues on prefix P."
+  "Navigate a list of open issues available for notification at point.
+All issues on prefix P."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((notification (gh-notify-current-notification)))
@@ -1109,8 +1109,7 @@ notification at point, all issues on prefix P."
               (forge-visit (forge-get-issue repo topic)))))))))
 
 (defun gh-notify-display-state ()
-  "Show the current state for an issue or pull request associated to a
-notification."
+  "Show the current state for an issue or pull request notification."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((notification (gh-notify-current-notification)))
@@ -1345,8 +1344,8 @@ possible."
       (when move-forward (forward-line)))))
 
 (defsubst gh-notify-do-visible-notifications (function)
-  "Call FUNCTION once for each visible notification, passing notification as
-an argument."
+  "Call FUNCTION once for each visible notification.
+Passes notification as an argument."
   (mapc function
         (if (region-active-p)
             (save-excursion
@@ -1400,8 +1399,8 @@ If there is a region, only unmark notifications in region."
         (gh-notify-retrieve-notifications)))))
 
 (defun gh-notify-visit-notification (P)
-  "Attempt to visit notification at point in some sane way, browse issue or PR
-on prefix P."
+  "Attempt to visit notification at point in some sane way.
+Browse issue or PR on prefix P."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((current-notification (gh-notify-current-notification)))
