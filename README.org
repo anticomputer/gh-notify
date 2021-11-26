@@ -1,3 +1,5 @@
+[[https://melpa.org/#/gh-notify][file:https://melpa.org/packages/gh-notify-badge.svg]]
+
 This is gh-notify: A thin ui veneer on top of Magit/Forge porcelain for
 juggling large amounts of GitHub notifications at speed.
 
