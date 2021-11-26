@@ -5,8 +5,8 @@
 ;;
 ;; All rights reserved
 
-;; Modified: 2021-11-23
-;; Version: 0.1
+;; Modified: 2021-11-26
+;; Version: 0.1.0
 ;; Author: Bas Alberts <bas@anti.computer>
 ;;         xristos <xristos@sdf.org>
 ;;
