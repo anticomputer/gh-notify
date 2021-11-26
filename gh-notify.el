@@ -216,7 +216,8 @@ Use this to muzzle specific repos that you want to silence across sessions.")
 (defvar gh-notify-redraw-on-visit t
   "Automatically redraw notifications on `forge-visit'.
 
-If you prefer to manually refresh notification display state after visits, set this to nil.")
+If you prefer to manually refresh notification display state after visits, set
+this to nil.")
 
 (cl-defstruct (gh-notify-notification
                (:constructor gh-notify-notification-create)
@@ -719,7 +720,7 @@ actions.
 (defun gh-notify-active-filter ()
   "Return currently active filter string or nil."
   (when gh-notify--active-filter
-    (apply 'string (reverse gh-notify--active-filter))))
+    (apply #'string (reverse gh-notify--active-filter))))
 
 (defun gh-notify-render-notification (notification)
   "Return string representation of NOTIFICATION.
@@ -807,7 +808,8 @@ It must not span more than one line but it may contain text properties."
 
 (defun gh-notify-limit-notification (notification)
   "Limits NOTIFICATION by status.
-Limiting operation depends on `gh-notify-reason-limit', `gh-notify-type-limit' and `gh-notify--repo-limit'."
+Limiting operation depends on `gh-notify-reason-limit', `gh-notify-type-limit'
+and `gh-notify--repo-limit'."
   (let ((repo-id (gh-notify-notification-repo-id notification)))
     ;; 3 pass filter: repo -> type -> reason
     (when
@@ -1052,7 +1054,8 @@ The alist contains (repo-id . notifications) pairs."
 
 ;; modified from forge-read-issue
 (defun gh-notify-ls-pullreqs-at-point (P)
-  "Navigate a list of open pull requests available for the repo associated to notification at point, all pull request on prefix P."
+  "Navigate a list of open pull requests available for the repo associated to
+notification at point, all pull request on prefix P."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((notification (gh-notify-current-notification)))
@@ -1078,7 +1081,8 @@ The alist contains (repo-id . notifications) pairs."
               (forge-visit (forge-get-pullreq repo topic)))))))))
 
 (defun gh-notify-ls-issues-at-point (P)
-  "Navigate a list of open issues available for the repo associated to notification at point, all issues on prefix P."
+  "Navigate a list of open issues available for the repo associated to
+notification at point, all issues on prefix P."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((notification (gh-notify-current-notification)))
@@ -1105,7 +1109,8 @@ The alist contains (repo-id . notifications) pairs."
               (forge-visit (forge-get-issue repo topic)))))))))
 
 (defun gh-notify-display-state ()
-  "Show the current state for an issue or pull request associated to a notification."
+  "Show the current state for an issue or pull request associated to a
+notification."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((notification (gh-notify-current-notification)))
@@ -1340,7 +1345,8 @@ possible."
       (when move-forward (forward-line)))))
 
 (defsubst gh-notify-do-visible-notifications (function)
-  "Call FUNCTION once for each visible notification, passing notification as an argument."
+  "Call FUNCTION once for each visible notification, passing notification as
+an argument."
   (mapc function
         (if (region-active-p)
             (save-excursion
@@ -1394,7 +1400,8 @@ If there is a region, only unmark notifications in region."
         (gh-notify-retrieve-notifications)))))
 
 (defun gh-notify-visit-notification (P)
-  "Attempt to visit notification at point in some sane way, browse issue or PR on prefix P."
+  "Attempt to visit notification at point in some sane way, browse issue or PR
+on prefix P."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((current-notification (gh-notify-current-notification)))
