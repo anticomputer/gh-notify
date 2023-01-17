@@ -1472,6 +1472,7 @@ Browse issue or PR on prefix P."
         (browse-url url))
     (message "Can't browse to this notification!")))
 
+;;;###autoload
 (defun gh-notify ()
   "Magit/Forge notification juggling."
   (interactive)
