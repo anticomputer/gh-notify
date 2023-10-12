@@ -1078,7 +1078,7 @@ All pull request on prefix P."
                           (string-to-number (match-string 1 choice)))))
           (with-demoted-errors "Warning: %S"
             (with-temp-buffer
-              (forge-visit (forge-get-pullreq repo topic)))))))))
+              (forge-visit-pullreq (forge-get-pullreq repo topic)))))))))
 
 (defun gh-notify-ls-issues-at-point (P)
   "Navigate a list of open issues available for notification at point.
@@ -1106,7 +1106,7 @@ All issues on prefix P."
                           (string-to-number (match-string 1 choice)))))
           (with-demoted-errors "Warning: %S"
             (with-temp-buffer
-              (forge-visit (forge-get-issue repo topic)))))))))
+              (forge-visit-issue (forge-get-issue repo topic)))))))))
 
 (defun gh-notify-display-state ()
   "Show the current state for an issue or pull request notification."
@@ -1380,7 +1380,10 @@ If there is a region, only unmark notifications in region."
       ;; XXX: improve me, needs to detect when we don't have a full repo locally
       ;; XXX: which we can probably just pull from the Forge DB
       (if repo
-          (forge-visit repo)
+	  (let ((worktree (oref repo worktree)))
+	    (if (and worktree (file-directory-p worktree))
+		(magit-status-setup-buffer worktree)
+	      (forge-list-issues (oref repo id))))
         (message "No forge github repo available at point!")))))
 
 (defun gh-notify-mark-notification-read (notification)
@@ -1446,14 +1449,14 @@ Browse issue or PR on prefix P."
              (gh-notify-mark-notification-read current-notification)
              (with-demoted-errors "Warning: %S"
                (with-temp-buffer
-                 (forge-visit (forge-get-issue repo topic))
+                 (forge-visit-issue (forge-get-issue repo topic))
                  (forge-pull-topic topic))))
             ('pullreq
              ;;(message "handling a pull request ...")
              (gh-notify-mark-notification-read current-notification)
              (with-demoted-errors "Warning: %S"
                (with-temp-buffer
-                 (forge-visit (forge-get-pullreq repo topic))
+                 (forge-visit-pullreq (forge-get-pullreq repo topic))
                  (forge-pull-topic topic))))
             ('commit
              (message "Commit not handled yet!"))
