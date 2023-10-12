@@ -967,7 +967,7 @@ Optionally provide a CALLBACK."
 (defun gh-notify--forge-get-notifications ()
   "Get forge notifications."
   (let ((results '()))
-    (when-let ((ns (forge--list-notifications-all)))
+    (when-let ((ns (forge--ls-notifications-all)))
       (pcase-dolist (`(,_ . ,ns) (--group-by (oref it repository) ns))
         (let ((repo (forge-get-repository (car ns))))
           (dolist (notify ns)
