@@ -968,7 +968,7 @@ Optionally provide a CALLBACK."
   "A kludge to support changing forge notification internals over time."
   (cond ((fboundp 'forge--list-notifications-all) (forge--list-notifications-all))
         ((fboundp 'forge--ls-notifications-all) (forge--ls-notifications-all))
-        ((fboundp 'forge--ls-notifications) (forge--ls-notifications '(all)))
+        ((fboundp 'forge--ls-notifications) (forge--ls-notifications '(unread pending done)))
         (t (message "Could not resolve forge notification function") nil)))
 
 (defun gh-notify--forge-get-notifications ()
