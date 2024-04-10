@@ -223,9 +223,11 @@ this to nil.")
                (:constructor gh-notify-notification-create)
                (:copier nil))
   (forge-obj nil :read-only nil)
+  (topic-obj nul :read-only nil)
   (id nil :read-only t)
   (type nil :read-only t)
   (topic nil :read-only t)
+  (number nil :read-only t)
   (repo-id nil :read-only t)
   (repo nil :read-only t)
   (unread nil :read-only t)
@@ -278,20 +280,31 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
     ;; get timestamp as an emacs time value to juggle
     for ts = (encode-time (iso8601-parse (oref forge-notification updated)))
     for date = (format-time-string "%F" ts) ; use local time on our end for display
+    for topic-obj = (pcase (oref forge-notification type)
+                      ('issue
+                       (forge-get-issue (oref forge-notification topic)))
+                      ('pullreq
+                       (forge-get-pullreq (oref forge-notification topic))))
     do
     (let* ((notification
             (gh-notify-notification-create
              ;; retain the obj ref for db interactions
              :forge-obj forge-notification
+             :topic-obj topic-obj
              ;; yank all the forge crud for convenience
              :id (oref forge-notification id)
              :reason (oref forge-notification reason)
              :updated (oref forge-notification updated)
              :topic (oref forge-notification topic)
+             :number (when topic-obj (oref topic-obj number))
              :type (oref forge-notification type)
              :repo-id repo-id
              :repo repo
-             :unread (oref forge-notification unread-p)
+             ;; unread-p changed to a topic status scheme in db version >= 11
+             :unread
+             ;; https://github.com/magit/forge/blob/99d319823719339e0c324ad3e9f78564865ec07a/lisp/forge-db.el#L471
+             (when topic-obj
+               (eq (oref topic-obj status) 'unread))
              :url (oref forge-notification url)
              :title (oref forge-notification title)
              ;; we use this for an accurate sort
@@ -734,7 +747,7 @@ It must not span more than one line but it may contain text properties."
         (unread (gh-notify-notification-unread notification))
         (reason (gh-notify-notification-reason notification))
         (date (gh-notify-notification-date notification))
-        (topic (gh-notify-notification-topic notification))
+        (number (gh-notify-notification-number notification))
         (state (gh-notify-notification-state notification)))
     (let* ((unread-str
             (cond (is-marked
@@ -764,7 +777,7 @@ It must not span more than one line but it may contain text properties."
                  (t
                   "."))
               ""))
-           (repo-str (format "%s #%s" repo-id topic))
+           (repo-str (format "%s #%s" repo-id number))
            (reason-str (format "[%s]" reason))
            (desc-str
             (if (eq gh-notify-default-view :title)
@@ -865,122 +878,12 @@ and `gh-notify--repo-limit'."
 ;;; Forge API
 ;;;
 
-;; XXX: here be dragons: forge api does not support "since" based refreshes
-;; XXX: so add some logic that does not pull _ALL_ notifications EVERY time
-;; XXX: unless we explicitly have to ... this is prone to breakage due to
-;; XXX: desync with forge code :)
-
-;; warning: this incremental logic does not account for e.g. you being added
-;; to a new repo that for some reason has notifications for you that live in
-;; the past ... it should work fine for any forward notifications, but you
-;; should manage global base-state inits from the regular magit forge ui
-;;
-;; Nothing we do here will interfere with normal Magit/Forge operation and
-;; you can always feel free to fetch all notifications again through Magit/Forge
-;; if you feel like something DID get messed up and you need a blank slate to
-;; start from.
-
-(defvar-local gh-notify--forge-last-timestamp nil
-  "The most recently updated notification `gh-notify' knows about.")
-
-(cl-defmethod gh-notify-forge--pull-notifications
-  ((_class (subclass forge-github-repository)) githost &optional callback)
-  "An incremental version to retrieve `forge--pull-notifications' from GITHOST.
-Optionally provide a CALLBACK."
-  ;; The GraphQL API doesn't support notifications and also likes to
-  ;; timeout for handcrafted requests, forcing us to perform a major
-  ;; rain dance.
-  (let ((spec (assoc githost forge-alist)))
-    (unless spec
-      (error "No entry for %S in forge-alist" githost))
-    (forge--msg nil t nil "Pulling notifications")
-    (pcase-let*
-        ((`(,_ ,apihost ,forge ,_) spec)
-         (notifs (-keep (lambda (data)
-                          ;; Github may return notifications for repos
-                          ;; the user no longer has access to.  Trying
-                          ;; to retrieve information for such a repo
-                          ;; leads to an error, which we suppress.  See #164.
-                          (with-demoted-errors "forge--pull-notifications: %S"
-                            (forge--ghub-massage-notification
-                             data forge githost)))
-                        ;; try to be a bit more clever about how many notifications we need to fetch
-                        (let ((params '((all . "true")))
-                              (since (if gh-notify--forge-last-timestamp
-                                         (iso8601-parse gh-notify--forge-last-timestamp)
-                                       nil)))
-                          (when since
-                            ;; +1 sec since known latest update
-                            (setcar since (+ 1 (car since)))
-                            (push `(since . ,(format-time-string
-                                              "%Y-%m-%dT%H:%M:%SZ"
-                                              (encode-time since) t)) params)
-                            (message "Refreshing forge updates since %s" (alist-get 'since params)))
-                          (forge--ghub-get nil "/notifications"
-                            params
-                            :host apihost :unpaginate t))))
-         (groups (-partition-all 50 notifs))
-         (pages  (length groups))
-         (page   0)
-         (result nil))
-      (cl-labels
-          ((cb (&optional data _headers _status _req)
-               (when data
-                 (setq result (nconc result (cdr data))))
-               (if groups
-                   (progn (cl-incf page)
-                          (forge--msg nil t nil
-                                      "Pulling notifications (page %s/%s)"
-                                      page pages)
-                          (ghub--graphql-vacuum
-                           (cons 'query (-keep #'caddr (pop groups)))
-                           nil #'cb nil :auth 'forge))
-                 (forge--msg nil t t   "Pulling notifications")
-                 (forge--msg nil t nil "Storing notifications")
-                 (emacsql-with-transaction (forge-db)
-                   ;; XXX: for gh-notify we don't want to nuke the db, but replace inserts instead
-                   ;; XXX: this should not interfere with normal magit/forge operation ... i THINK ;)
-                   (when nil
-                     (forge-sql [:delete-from notification
-                                              :where (= forge $s1)] forge))
-                   (pcase-dolist (`(,key ,repo ,query ,obj) notifs)
-                     (when nil
-                       (message "XXX: obj id=%s" (oref obj id))
-                       (message "XXX: obj repository=%s" (oref obj repository))
-                       (message "XXX: obj updated_at=%s" (oref obj updated))
-                       (message "XXX: obj title=%s" (oref obj title))
-                       (message "==="))
-                     ;; XXX: enable replace so we don't collide on updates for existing notification id
-                     (closql-insert (forge-db) obj t)
-                     (forge--zap-repository-cache (forge-get-repository obj))
-                     (when query
-                       (oset (funcall (if (eq (oref obj type) 'issue)
-                                          #'forge--update-issue
-                                        #'forge--update-pullreq)
-                                      repo (cdr (cadr (assq key result))) nil)
-                             unread-p (oref obj unread-p)))))
-                 (forge--msg nil t t "Storing notifications")
-                 (when callback
-                   (funcall callback)))))
-        (cb)))))
-
 (defun gh-notify--forge-get-notifications ()
-  "Get forge notifications."
+  "Get all forge notifications."
   (let ((results '()))
-    (when-let ((ns (forge--list-notifications-all)))
+    (when-let ((ns (forge--ls-notifications '(unread pending done))))
       (pcase-dolist (`(,_ . ,ns) (--group-by (oref it repository) ns))
         (let ((repo (forge-get-repository (car ns))))
-          (dolist (notify ns)
-            ;; id reason updated type topic title url unread-p ... etc.
-            (with-slots (updated) notify
-              ;; XXX: since-hack support for incremental refresh
-              (if gh-notify--forge-last-timestamp
-                  ;; update refresh floor if notification is newer
-                  (when (time-less-p (encode-time (iso8601-parse gh-notify--forge-last-timestamp))
-                                     (encode-time (iso8601-parse updated)))
-                    (setq-local gh-notify--forge-last-timestamp updated))
-                ;; first seen timestamp
-                (setq-local gh-notify--forge-last-timestamp updated))))
           ;; return a forge repo-id and notifications for that repo
           (push (list repo ns) results))))
     results))
@@ -1023,7 +926,7 @@ The alist contains (repo-id . notifications) pairs."
 
   ;; ensure we always start from the most recent Magit/Forge db state
   (call-interactively #'gh-notify-retrieve-notifications)
-  (gh-notify-forge--pull-notifications 'forge-github-repository "github.com" #'gh-notify-forge-refresh-cb))
+  (forge--pull-notifications 'forge-github-repository "github.com" #'gh-notify-forge-refresh-cb))
 
 (defun gh-notify-forge-refresh-cb ()
   "Callback for Forge refresh."
@@ -1038,15 +941,24 @@ The alist contains (repo-id . notifications) pairs."
     (closql-insert (forge-db) obj t)))
 
 (defun gh-notify--get-topic-state (type repo topic)
-  "Get current topic state of TYPE from forge REPO db for TOPIC."
+  "Get current topic state from forge db."
   (gh-notify--with-timing
     (pcase type
       ('issue
-       (let ((issue (forge-get-issue repo topic)))
+       (let ((issue (forge-get-issue topic)))
          (oref issue state)))
       ('pullreq
-       (let ((pullreq (forge-get-pullreq repo topic)))
+       (let ((pullreq (forge-get-pullreq topic)))
          (oref pullreq state))))))
+
+(defun gh-notify-mark-notification-read (notification)
+  "Mark NOTIFICATION as read."
+  (when-let (topic-obj (gh-notify-notification-topic-obj notification))
+    (when (oref topic-obj status)
+      (oset topic-obj status 'done)
+      (gh-notify--insert-forge-obj topic-obj)
+      (when gh-notify-redraw-on-visit
+        (gh-notify-retrieve-notifications)))))
 
 ;;;
 ;;; Interactive
@@ -1078,7 +990,7 @@ All pull request on prefix P."
                           (string-to-number (match-string 1 choice)))))
           (with-demoted-errors "Warning: %S"
             (with-temp-buffer
-              (forge-visit (forge-get-pullreq repo topic)))))))))
+              (forge-visit-pullreq (forge-get-pullreq topic)))))))))
 
 (defun gh-notify-ls-issues-at-point (P)
   "Navigate a list of open issues available for notification at point.
@@ -1106,7 +1018,7 @@ All issues on prefix P."
                           (string-to-number (match-string 1 choice)))))
           (with-demoted-errors "Warning: %S"
             (with-temp-buffer
-              (forge-visit (forge-get-issue repo topic)))))))))
+              (forge-visit-issue (forge-get-issue topic)))))))))
 
 (defun gh-notify-display-state ()
   "Show the current state for an issue or pull request notification."
@@ -1380,23 +1292,12 @@ If there is a region, only unmark notifications in region."
       ;; XXX: improve me, needs to detect when we don't have a full repo locally
       ;; XXX: which we can probably just pull from the Forge DB
       (if repo
-          (forge-visit repo)
+          ;; forge-visit no longer exists so use the original implementation here
+          (let ((worktree (oref repo worktree)))
+            (if (and worktree (file-directory-p worktree))
+                (magit-status-setup-buffer worktree)
+              (forge-list-issues (oref repo id))))
         (message "No forge github repo available at point!")))))
-
-(defun gh-notify-mark-notification-read (notification)
-  "Mark NOTIFICATION as read."
-  ;; XXX: Forge DB hack state hack-arounds:
-  ;; XXX: magit/forge will mark a topic as read with GitHub.com itself
-  ;; XXX: but this doesn't translate to the notification objects and
-  ;; XXX: since we don't want to refresh the entire notification history
-  ;; XXX: we just toggle directly on the object ourselves, update the db
-  ;; XXX: and re-render our view
-  (let ((obj (gh-notify-notification-forge-obj notification)))
-    (when (oref obj unread-p)
-      (oset obj unread-p nil)
-      (gh-notify--insert-forge-obj obj)
-      (when gh-notify-redraw-on-visit
-        (gh-notify-retrieve-notifications)))))
 
 (defun gh-notify-visit-notification (P)
   "Attempt to visit notification at point in some sane way.
@@ -1407,11 +1308,12 @@ Browse issue or PR on prefix P."
     (let* ((repo-id (gh-notify-notification-repo-id current-notification))
            (repo (gh-notify-notification-repo current-notification))
            (topic (gh-notify-notification-topic current-notification))
+           (number (gh-notify-notification-number current-notification))
            (type (gh-notify-notification-type current-notification))
            (title (gh-notify-notification-title current-notification)))
       (if P
           ;; browse url for issue or pull request on prefix
-          (gh-notify-browse-notification repo-id type topic)
+          (gh-notify-browse-notification repo-id type number)
         ;; handle through magit forge otherwise
 
         ;; important: we want to re-render on read/unread state before switching
@@ -1442,25 +1344,23 @@ Browse issue or PR on prefix P."
 
           (pcase type
             ('issue
-             ;;(message "handling an issue ...")
              (gh-notify-mark-notification-read current-notification)
              (with-demoted-errors "Warning: %S"
                (with-temp-buffer
-                 (forge-visit (forge-get-issue repo topic))
+                 (forge-visit-issue (forge-get-issue topic))
                  (forge-pull-topic topic))))
             ('pullreq
-             ;;(message "handling a pull request ...")
              (gh-notify-mark-notification-read current-notification)
              (with-demoted-errors "Warning: %S"
                (with-temp-buffer
-                 (forge-visit (forge-get-pullreq repo topic))
+                 (forge-visit-pullreq (forge-get-pullreq topic))
                  (forge-pull-topic topic))))
             ('commit
              (message "Commit not handled yet!"))
             (_
              (message "Handling something else (%s) %s\n" type title))))))))
 
-(defun gh-notify-browse-notification (repo-id type topic)
+(defun gh-notify-browse-notification (repo-id type number)
   "Browse to a TOPIC of TYPE on GitHub REPO-ID."
   (if (member type '(issue pullreq))
       (let ((url (format "https://github.com/%s/%s/%s"
@@ -1468,7 +1368,7 @@ Browse issue or PR on prefix P."
                          (pcase type
                            ('issue "issues")
                            ('pullreq "pull"))
-                         topic)))
+                         number)))
         (browse-url url))
     (message "Can't browse to this notification!")))
 
