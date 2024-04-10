@@ -5,14 +5,14 @@
 ;;
 ;; All rights reserved
 
-;; Modified: 2021-11-26
-;; Version: 0.1.0
+;; Modified: 2024-04-10
+;; Version: 2.0.1
 ;; Author: Bas Alberts <bas@anti.computer>
 ;;         xristos <xristos@sdf.org>
 ;;
 ;; Maintainer: Bas Alberts <bas@anti.computer>
 ;; URL: https://github.com/anticomputer/gh-notify
-;; Package-Requires: ((emacs "27.1") (magit "3.0.0") (forge "0.2.0"))
+;; Package-Requires: ((emacs "29.1") (magit "3.3.0") (forge "0.3.2"))
 ;; Keywords: comm
 
 ;; Redistribution and use in source and binary forms, with or without
@@ -979,8 +979,8 @@ All pull request on prefix P."
                           (oref obj number)
                           (oref obj title))))
            ;; list all issues on prefix, only open by default
-           (pullreqs (if P (forge-ls-pullreqs repo)
-                       (forge-ls-pullreqs repo 'open)))
+           (pullreqs (if P (forge--ls-pullreqs repo)
+                       (forge--ls-active-pullreqs repo)))
            (choice (completing-read
                     (format "%s visit pull request (%s): " repo-id (if P "all" "open"))
                     (mapcar fmt pullreqs) nil t)))
@@ -990,7 +990,7 @@ All pull request on prefix P."
                           (string-to-number (match-string 1 choice)))))
           (with-demoted-errors "Warning: %S"
             (with-temp-buffer
-              (forge-visit-pullreq (forge-get-pullreq topic)))))))))
+              (forge-visit-pullreq (forge-get-pullreq repo topic)))))))))
 
 (defun gh-notify-ls-issues-at-point (P)
   "Navigate a list of open issues available for notification at point.
@@ -1006,8 +1006,8 @@ All issues on prefix P."
                           (oref obj number)
                           (oref obj title))))
            ;; list all issues on prefix, only open by default
-           (issues (if P (forge-ls-issues repo)
-                     (forge-ls-issues repo 'open)))
+           (issues (if P (forge--ls-issues repo)
+                     (forge--ls-open-issues repo)))
            (choice (completing-read
                     (format "%s visit issue (%s): " repo-id (if P "all" "open"))
                     (mapcar fmt issues) nil t)))
@@ -1018,7 +1018,7 @@ All issues on prefix P."
                           (string-to-number (match-string 1 choice)))))
           (with-demoted-errors "Warning: %S"
             (with-temp-buffer
-              (forge-visit-issue (forge-get-issue topic)))))))))
+              (forge-visit-issue (forge-get-issue repo topic)))))))))
 
 (defun gh-notify-display-state ()
   "Show the current state for an issue or pull request notification."
