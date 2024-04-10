@@ -925,49 +925,56 @@ Optionally provide a CALLBACK."
          (result nil))
       (cl-labels
           ((cb (&optional data _headers _status _req)
-               (when data
-                 (setq result (nconc result (cdr data))))
-               (if groups
-                   (progn (cl-incf page)
-                          (forge--msg nil t nil
-                                      "Pulling notifications (page %s/%s)"
-                                      page pages)
-                          (ghub--graphql-vacuum
-                           (cons 'query (-keep #'caddr (pop groups)))
-                           nil #'cb nil :auth 'forge))
-                 (forge--msg nil t t   "Pulling notifications")
-                 (forge--msg nil t nil "Storing notifications")
-                 (emacsql-with-transaction (forge-db)
-                   ;; XXX: for gh-notify we don't want to nuke the db, but replace inserts instead
-                   ;; XXX: this should not interfere with normal magit/forge operation ... i THINK ;)
+             (when data
+               (setq result (nconc result (cdr data))))
+             (if groups
+                 (progn (cl-incf page)
+                        (forge--msg nil t nil
+                                    "Pulling notifications (page %s/%s)"
+                                    page pages)
+                        (ghub--graphql-vacuum
+                         (cons 'query (-keep #'caddr (pop groups)))
+                         nil #'cb nil :auth 'forge))
+               (forge--msg nil t t   "Pulling notifications")
+               (forge--msg nil t nil "Storing notifications")
+               (emacsql-with-transaction (forge-db)
+                 ;; XXX: for gh-notify we don't want to nuke the db, but replace inserts instead
+                 ;; XXX: this should not interfere with normal magit/forge operation ... i THINK ;)
+                 (when nil
+                   (forge-sql [:delete-from notification
+                                            :where (= forge $s1)] forge))
+                 (pcase-dolist (`(,key ,repo ,query ,obj) notifs)
                    (when nil
-                     (forge-sql [:delete-from notification
-                                              :where (= forge $s1)] forge))
-                   (pcase-dolist (`(,key ,repo ,query ,obj) notifs)
-                     (when nil
-                       (message "XXX: obj id=%s" (oref obj id))
-                       (message "XXX: obj repository=%s" (oref obj repository))
-                       (message "XXX: obj updated_at=%s" (oref obj updated))
-                       (message "XXX: obj title=%s" (oref obj title))
-                       (message "==="))
-                     ;; XXX: enable replace so we don't collide on updates for existing notification id
-                     (closql-insert (forge-db) obj t)
-                     (forge--zap-repository-cache (forge-get-repository obj))
-                     (when query
-                       (oset (funcall (if (eq (oref obj type) 'issue)
-                                          #'forge--update-issue
-                                        #'forge--update-pullreq)
-                                      repo (cdr (cadr (assq key result))) nil)
-                             unread-p (oref obj unread-p)))))
-                 (forge--msg nil t t "Storing notifications")
-                 (when callback
-                   (funcall callback)))))
+                     (message "XXX: obj id=%s" (oref obj id))
+                     (message "XXX: obj repository=%s" (oref obj repository))
+                     (message "XXX: obj updated_at=%s" (oref obj updated))
+                     (message "XXX: obj title=%s" (oref obj title))
+                     (message "==="))
+                   ;; XXX: enable replace so we don't collide on updates for existing notification id
+                   (closql-insert (forge-db) obj t)
+                   (forge--zap-repository-cache (forge-get-repository obj))
+                   (when query
+                     (oset (funcall (if (eq (oref obj type) 'issue)
+                                        #'forge--update-issue
+                                      #'forge--update-pullreq)
+                                    repo (cdr (cadr (assq key result))) nil)
+                           unread-p (oref obj unread-p)))))
+               (forge--msg nil t t "Storing notifications")
+               (when callback
+                 (funcall callback)))))
         (cb)))))
+
+(defun gh-notify--forge-list-notifications-all ()
+  "A kludge to support changing forge notification internals over time."
+  (cond ((fboundp 'forge--list-notifications-all) (forge--list-notifications-all))
+        ((fboundp 'forge--ls-notifications-all) (forge--ls-notifications-all))
+        ((fboundp 'forge--ls-notifications) (forge--ls-notifications '(all)))
+        (t (message "Could not resolve forge notification function") nil)))
 
 (defun gh-notify--forge-get-notifications ()
   "Get forge notifications."
   (let ((results '()))
-    (when-let ((ns (forge--list-notifications-all)))
+    (when-let ((ns (gh-notify--forge-list-notifications-all)))
       (pcase-dolist (`(,_ . ,ns) (--group-by (oref it repository) ns))
         (let ((repo (forge-get-repository (car ns))))
           (dolist (notify ns)
@@ -1078,7 +1085,14 @@ All pull request on prefix P."
                           (string-to-number (match-string 1 choice)))))
           (with-demoted-errors "Warning: %S"
             (with-temp-buffer
-              (forge-visit (forge-get-pullreq repo topic)))))))))
+              ;; XXX: kludge to keep backwards compatibility with older forge versions
+              (cond ((fboundp 'forge-visit)
+                     (forge-visit (forge-get-pullreq repo topic)))
+                    ((fboundp 'forge-visit-pullreq)
+                     (forge-visit-pullreq (forge-get-pullreq repo topic)))
+                    (t
+                     (message "Could not resolve forge visit pullreq function!")))
+              )))))))
 
 (defun gh-notify-ls-issues-at-point (P)
   "Navigate a list of open issues available for notification at point.
@@ -1106,7 +1120,13 @@ All issues on prefix P."
                           (string-to-number (match-string 1 choice)))))
           (with-demoted-errors "Warning: %S"
             (with-temp-buffer
-              (forge-visit (forge-get-issue repo topic)))))))))
+              (cond ((fboundp 'forge-visit)
+                     (forge-visit (forge-get-issue repo topic)))
+                    ((fboundp 'forge-visit-issue)
+                     (forge-visit-issue (forge-get-issue repo topic)))
+                    (t
+                     (message "Could not resolve forge visit issue function!")))
+              )))))))
 
 (defun gh-notify-display-state ()
   "Show the current state for an issue or pull request notification."
@@ -1380,7 +1400,11 @@ If there is a region, only unmark notifications in region."
       ;; XXX: improve me, needs to detect when we don't have a full repo locally
       ;; XXX: which we can probably just pull from the Forge DB
       (if repo
-          (forge-visit repo)
+          ;; forge-visit no longer exists so use the original implementation here
+          (let ((worktree (oref repo worktree)))
+            (if (and worktree (file-directory-p worktree))
+                (magit-status-setup-buffer worktree)
+              (forge-list-issues (oref repo id))))
         (message "No forge github repo available at point!")))))
 
 (defun gh-notify-mark-notification-read (notification)
@@ -1446,14 +1470,24 @@ Browse issue or PR on prefix P."
              (gh-notify-mark-notification-read current-notification)
              (with-demoted-errors "Warning: %S"
                (with-temp-buffer
-                 (forge-visit (forge-get-issue repo topic))
+                 (cond ((fboundp 'forge-visit)
+                        (forge-visit (forge-get-issue repo topic)))
+                       ((fboundp 'forge-visit-issue)
+                        (forge-visit-issue (forge-get-issue repo topic)))
+                       (t
+                        (message "Could not resolve forge visit issue function!")))
                  (forge-pull-topic topic))))
             ('pullreq
              ;;(message "handling a pull request ...")
              (gh-notify-mark-notification-read current-notification)
              (with-demoted-errors "Warning: %S"
                (with-temp-buffer
-                 (forge-visit (forge-get-pullreq repo topic))
+                 (cond ((fboundp 'forge-visit)
+                        (forge-visit (forge-get-pullreq repo topic)))
+                       ((fboundp 'forge-visit-pullreq)
+                        (forge-visit-pullreq (forge-get-pullreq repo topic)))
+                       (t
+                        (message "Could not resolve forge visit pullreq function!")))
                  (forge-pull-topic topic))))
             ('commit
              (message "Commit not handled yet!"))
