@@ -6,13 +6,13 @@
 ;; All rights reserved
 
 ;; Modified: 2024-04-10
-;; Version: 2.0.1
+;; Version: 2.1.0
 ;; Author: Bas Alberts <bas@anti.computer>
 ;;         xristos <xristos@sdf.org>
 ;;
 ;; Maintainer: Bas Alberts <bas@anti.computer>
 ;; URL: https://github.com/anticomputer/gh-notify
-;; Package-Requires: ((emacs "29.1") (magit "3.3.0") (forge "0.3.2"))
+;; Package-Requires: ((emacs "29.1") (magit "3.3.0") (forge "0.4.0"))
 ;; Keywords: comm
 
 ;; Redistribution and use in source and binary forms, with or without
@@ -953,7 +953,7 @@ The alist contains (repo-id . notifications) pairs."
          (oref pullreq state))))))
 
 (defun gh-notify-set-notification-status (notification value)
-  "Set NOTIFICATION status as STATUS"
+  "Set NOTIFICATION status as VALUE"
   (when-let (topic-obj (gh-notify-notification-topic-obj notification))
     (when (oref topic-obj status)
       (oset topic-obj status value)
@@ -1184,6 +1184,20 @@ All issues on prefix P."
       (kill-new url)
       (message "Copied: %s" url))))
 
+(defun gh-notify-set-status-read (&optional notification)
+  "Set status of NOTIFICATION at point to read."
+  (interactive)
+  (cl-assert (eq major-mode 'gh-notify-mode) t)
+  (when-let ((notification (or notification (gh-notify-current-notification))))
+    (gh-notify-set-notification-status notification 'done)))
+
+(defun gh-notify-set-status-unread (&optional notification)
+  "Set status of NOTIFICATION at point to unread."
+  (interactive)
+  (cl-assert (eq major-mode 'gh-notify-mode) t)
+  (when-let ((notification (or notification (gh-notify-current-notification))))
+    (gh-notify-set-notification-status notification 'unread)))
+
 (defun gh-notify-retrieve-notifications ()
   "Retrieve and filter all Gh-Notify notifications.
 This wipes and recreates all notification state in Emacs but keeps the current
@@ -1212,7 +1226,7 @@ possible."
     (gh-notify--with-timing
       (cl-loop
        for notification in gh-notify--marked-notifications do
-       (gh-notify-set-notification-status notification 'done))
+       (gh-notify-set-status-read notification))
       (gh-notify-retrieve-notifications))))
 
 (defun gh-notify-marked-notifications-set-unread ()
@@ -1223,7 +1237,7 @@ possible."
     (gh-notify--with-timing
       (cl-loop
        for notification in gh-notify--marked-notifications do
-       (gh-notify-set-notification-status notification 'unread))
+       (gh-notify-set-status-unread notification))
       (gh-notify-retrieve-notifications))))
 
 (defun gh-notify-mark-notification (&optional notification)
