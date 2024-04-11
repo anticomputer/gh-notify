@@ -750,7 +750,6 @@ It must not span more than one line but it may contain text properties."
         (date (gh-notify-notification-date notification))
         (number (gh-notify-notification-number notification))
         (state (gh-notify-notification-state notification)))
-    (message "XXX: %s" unread)
     (let* ((unread-str
             (cond (is-marked
                    "*")
