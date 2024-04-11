@@ -280,7 +280,8 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
     ;; get timestamp as an emacs time value to juggle
     for ts = (encode-time (iso8601-parse (oref forge-notification updated)))
     for date = (format-time-string "%F" ts) ; use local time on our end for display
-    for topic-obj = (pcase (oref forge-notification type)
+    for type = (oref forge-notification type)
+    for topic-obj = (pcase type
                       ('issue
                        (forge-get-issue (oref forge-notification topic)))
                       ('pullreq
@@ -297,7 +298,7 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
              :updated (oref forge-notification updated)
              :topic (oref forge-notification topic)
              :number (when topic-obj (oref topic-obj number))
-             :type (oref forge-notification type)
+             :type type
              :repo-id repo-id
              :repo repo
              ;; unread-p changed to a topic status scheme in db version >= 11
@@ -326,7 +327,7 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
                         :key #'gh-notify-notification-ts)))))
 
 (defvar-local gh-notify--visible-notifications nil)
-(defvar-local gh-notify--marked-notifications 0)
+(defvar-local gh-notify--marked-notifications '())
 (defvar-local gh-notify--total-notification-count 0)
 
 (defun gh-notify--init-caches ()
@@ -464,8 +465,8 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
   (let* ((visible-notifications (hash-table-count gh-notify--visible-notifications))
          (total-repos (hash-table-count gh-notify--repo-index)))
     (cl-flet ((align (width str)
-                     (let ((spec (format "%%%ds" width)))
-                       (format spec str)))
+                (let ((spec (format "%%%ds" width)))
+                  (format spec str)))
               (size10 (x) (if (= x 0) 1 (1+ (floor (log x 10))))))
       (concat
        (align (+ 1 (* 2 (size10 gh-notify--total-notification-count)))
@@ -473,7 +474,7 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
                           'help-echo "Visible / total notifications"))
        " "
        (align (size10 gh-notify--total-notification-count)
-              (propertize (int-to-string gh-notify--marked-notifications)
+              (propertize (int-to-string (length gh-notify--marked-notifications))
                           'help-echo "Marked notifications"
                           'face 'gh-notify-notification-marked-face))
        " "
@@ -749,6 +750,7 @@ It must not span more than one line but it may contain text properties."
         (date (gh-notify-notification-date notification))
         (number (gh-notify-notification-number notification))
         (state (gh-notify-notification-state notification)))
+    (message "XXX: %s" unread)
     (let* ((unread-str
             (cond (is-marked
                    "*")
@@ -951,15 +953,14 @@ The alist contains (repo-id . notifications) pairs."
        (let ((pullreq (forge-get-pullreq topic)))
          (oref pullreq state))))))
 
-(defun gh-notify-mark-notification-read (notification)
-  "Mark NOTIFICATION as read."
+(defun gh-notify-set-notification-status (notification value)
+  "Set NOTIFICATION status as STATUS"
   (when-let (topic-obj (gh-notify-notification-topic-obj notification))
     (when (oref topic-obj status)
-      (oset topic-obj status 'done)
+      (oset topic-obj status value)
       (gh-notify--insert-forge-obj topic-obj)
       (when gh-notify-redraw-on-visit
         (gh-notify-retrieve-notifications)))))
-
 ;;;
 ;;; Interactive
 ;;;
@@ -1192,7 +1193,7 @@ possible."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (gh-notify--with-timing
-    (setq gh-notify--marked-notifications 0)
+    (setq gh-notify--marked-notifications '())
     (gh-notify--reindex-notifications (gh-notify-get-notifications))
     (gh-notify--filter-notifications)))
 
@@ -1203,25 +1204,28 @@ possible."
   (setq gh-notify--active-filter nil)
   (gh-notify--filter-notifications))
 
-;; example code for when we start doing bulk action support:
-;;
-;; (defun gh-notify-something-marked-notifications ()
-;;   "Something all marked notifications."
-;;   (interactive)
-;;   (cl-assert (eq major-mode 'gh-notify-mode) t)
-;;   (when (> gh-notify--marked-notifications 0)
-;;     (gh-notify--with-timing
-;;       (cl-loop
-;;        for session being the hash-keys of gh-notify--repo-index
-;;        for session-notifications = (cdr (gethash session gh-notify--repo-index)) do
-;;        (cl-loop
-;;         for notification in session-notifications
-;;         when (gh-notify-notification-is-marked notification)
-;;         collect notification into marked-notifications
-;;         finally do
-;;         (cl-loop for notification in marked-notifications do
-;;                  (gh-notify--something notification))))
-;;       (gh-notify-retrieve-notifications))))
+;; XXX move this to a macro, just testing for now with duplication
+(defun gh-notify-marked-notifications-set-read ()
+  "Set all marked notifications to read."
+  (interactive)
+  (cl-assert (eq major-mode 'gh-notify-mode) t)
+  (when gh-notify--marked-notifications
+    (gh-notify--with-timing
+      (cl-loop
+       for notification in gh-notify--marked-notifications do
+       (gh-notify-set-notification-status notification 'done))
+      (gh-notify-retrieve-notifications))))
+
+(defun gh-notify-marked-notifications-set-unread ()
+  "Set all marked notifications to unread."
+  (interactive)
+  (cl-assert (eq major-mode 'gh-notify-mode) t)
+  (when gh-notify--marked-notifications
+    (gh-notify--with-timing
+      (cl-loop
+       for notification in gh-notify--marked-notifications do
+       (gh-notify-set-notification-status notification 'unread))
+      (gh-notify-retrieve-notifications))))
 
 (defun gh-notify-mark-notification (&optional notification)
   "Mark NOTIFICATION at point."
@@ -1231,7 +1235,7 @@ possible."
     (when-let ((notification (or notification (gh-notify-current-notification))))
       (unless (gh-notify-notification-is-marked notification)
         (setf (gh-notify-notification-is-marked notification) t)
-        (cl-incf gh-notify--marked-notifications)
+        (push notification gh-notify--marked-notifications)
         (let ((inhibit-read-only t)
               (point (point)))
           (unwind-protect
@@ -1247,7 +1251,7 @@ possible."
     (when-let ((notification (or notification (gh-notify-current-notification))))
       (when (gh-notify-notification-is-marked notification)
         (setf (gh-notify-notification-is-marked notification) nil)
-        (cl-decf gh-notify--marked-notifications)
+        (delete notification gh-notify--marked-notifications)
         (let ((inhibit-read-only t)
               (point (point)))
           (unwind-protect
@@ -1344,13 +1348,13 @@ Browse issue or PR on prefix P."
 
           (pcase type
             ('issue
-             (gh-notify-mark-notification-read current-notification)
+             (gh-notify-set-notification-status current-notification 'done)
              (with-demoted-errors "Warning: %S"
                (with-temp-buffer
                  (forge-visit-issue (forge-get-issue topic))
                  (forge-pull-topic topic))))
             ('pullreq
-             (gh-notify-mark-notification-read current-notification)
+             (gh-notify-set-notification-status current-notification 'done)
              (with-demoted-errors "Warning: %S"
                (with-temp-buffer
                  (forge-visit-pullreq (forge-get-pullreq topic))
