@@ -891,10 +891,9 @@ and `gh-notify--repo-limit'."
   "Get all forge notifications."
   (let ((results '()))
     (when-let ((ns (forge--ls-notifications '(unread pending done))))
-      (pcase-dolist (`(,_ . ,ns) (--group-by (oref it repository) ns))
-        (let ((repo (forge-get-repository (car ns))))
-          ;; return a forge repo-id and notifications for that repo
-          (push (list repo ns) results))))
+      (pcase-dolist (`(,key . ,grouped-ns) (seq-group-by (lambda (it) (oref it repository)) ns))
+        (let ((repo (forge-get-repository (car grouped-ns))))
+          (push (list repo grouped-ns) results))))
     results))
 
 (defun gh-notify-get-notifications ()
