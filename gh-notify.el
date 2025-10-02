@@ -153,6 +153,12 @@
   "PR face."
   :group 'gh-notify)
 
+(defface gh-notify-notification-discussion-face
+  '((((class color) (background dark))  (:foreground "#7cb9e8"))
+    (((class color) (background light)) (:background "#7cb9e8")))
+  "Discussion face."
+  :group 'gh-notify)
+
 (defvar gh-notify-render-function #'gh-notify-render-notification
   "Function that renders a notification into a string for display.
 
@@ -772,6 +778,8 @@ It must not span more than one line but it may contain text properties."
               "P")
              ((eq type 'issue)
               "I")
+             ((eq type 'discussion)
+              "D")
              (t
               "?")))
            (state-str
@@ -798,7 +806,9 @@ It must not span more than one line but it may contain text properties."
         ('pullreq
          (setq type-str (propertize type-str 'face 'gh-notify-notification-pr-face)))
         ('issue
-         (setq type-str (propertize type-str 'face 'gh-notify-notification-issue-face))))
+         (setq type-str (propertize type-str 'face 'gh-notify-notification-issue-face)))
+        ('discussion
+         (setq type-str (propertize type-str 'face 'gh-notify-notification-discussion-face))))
 
       ;; repo face is our default face for most components
       (setq date-str (propertize date-str 'face 'gh-notify-notification-repo-face))
@@ -1398,6 +1408,12 @@ Browse issue or PR on prefix P."
              (with-demoted-errors "Warning: %S"
                (with-temp-buffer
                  (forge-visit-pullreq (forge-get-pullreq topic))
+                 (forge-pull-topic topic))))
+            ('discussion
+             (gh-notify-set-notification-status current-notification 'pending)
+             (with-demoted-errors "Warning: %S"
+               (with-temp-buffer
+                 (forge-visit-discussion (forge-get-discussion topic))
                  (forge-pull-topic topic))))
             ('commit
              (message "Commit not handled yet!"))
