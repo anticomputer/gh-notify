@@ -1424,10 +1424,11 @@ Browse issue or PR on prefix P."
 
 (defun gh-notify-browse-notification (repo-id type number)
   "Browse to a TOPIC of TYPE on GitHub REPO-ID."
-  (if (member type '(issue pullreq))
+  (if (member type '(issue pullreq discussion))
       (let ((url (format "https://github.com/%s/%s/%s"
                          repo-id
                          (pcase type
+                           ('discussion "discussions")
                            ('issue "issues")
                            ('pullreq "pull"))
                          number)))
