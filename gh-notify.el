@@ -964,7 +964,9 @@ The alist contains (repo-id . notifications) pairs."
   (when-let (topic-obj (gh-notify-notification-topic-obj notification))
     (when (oref topic-obj status)
       (oset topic-obj status value)
-      (gh-notify--insert-forge-obj topic-obj)
+      ;; XXX: only oset the object now instead of replacing it in db
+      ;; XXX: https://github.com/anticomputer/gh-notify/issues/19
+      ;;(gh-notify--insert-forge-obj topic-obj)
       (when gh-notify-redraw-on-visit
         (gh-notify-retrieve-notifications)))))
 ;;;
@@ -1365,7 +1367,7 @@ Browse issue or PR on prefix P."
         ;; it can result in a lagging point, so take care of all the state rendering
         ;; first, and THEN trigger the buffer switch
 
-        (let ((default-directory gh-notify-smokescreen-path))
+        (cl-letf ((default-directory gh-notify-smokescreen-path))
 
           ;; XXX: this is a really ugly hack until I figure out how to cleanly make
           ;; XXX: magit ignore errors when we don't have a local copy of the repo
