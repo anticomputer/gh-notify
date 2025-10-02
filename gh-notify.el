@@ -216,7 +216,7 @@ Repos are in the form \"owner/repo\".
 
 Use this to muzzle specific repos that you want to silence across sessions.")
 
-(defvar gh-notify-smokescreen-path "~/.gh-notify-smokescreen"
+(defvar gh-notify-smokescreen-path (expand-file-name "~/.gh-notify-smokescreen")
   "The default path for the magit `forge-visit' smokescreen repo.")
 
 (defvar gh-notify-redraw-on-visit t
@@ -289,6 +289,8 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
     for date = (format-time-string "%F" ts) ; use local time on our end for display
     for type = (oref forge-notification type)
     for topic-obj = (pcase type
+                      ('discussion
+                       (forge-get-discussion (oref forge-notification topic)))
                       ('issue
                        (forge-get-issue (oref forge-notification topic)))
                       ('pullreq
