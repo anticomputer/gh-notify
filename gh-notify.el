@@ -1028,7 +1028,7 @@ All issues on prefix P."
            (P P)
            (callback
             (lambda ()
-              (message "XXX: %s" lexical-binding)
+              (interactive)
               (let*
                   ((issues
                     (let ((state (if P nil 'open)))
@@ -1047,8 +1047,7 @@ All issues on prefix P."
                     (with-demoted-errors "Warning: %S"
                       (with-temp-buffer
                         (forge-visit-issue (forge-get-issue repo topic))))))))))
-      (forge--pull repo callback)
-      )))
+      (forge--pull repo callback))))
 
 (defun gh-notify-display-state ()
   "Show the current state for an issue or pull request notification."
