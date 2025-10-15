@@ -1017,7 +1017,7 @@ All pull request on prefix P."
 
 (defun gh-notify-ls-issues-at-point (P)
   "Navigate a list of open issues available for notification at point.
-All issues on prefix P."
+Closed issues on prefix P."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((notification (gh-notify-current-notification)))
@@ -1031,7 +1031,7 @@ All issues on prefix P."
               (with-local-quit
                 (let*
                     ((issues
-                      (let ((state (if P nil 'open)))
+                      (let ((state (if P 'closed 'open)))
                         (forge--topic-collection
                          (forge--list-topics
                           (forge--topics-spec :type 'issue :state state)
