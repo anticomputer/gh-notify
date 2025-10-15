@@ -1028,25 +1028,25 @@ All issues on prefix P."
            (P P)
            (callback
             (lambda ()
-              (interactive)
-              (let*
-                  ((issues
-                    (let ((state (if P nil 'open)))
-                      (forge--topic-collection
-                       (forge--list-topics
-                        (forge--topics-spec :type 'issue :state state)
-                        repo))))
-                   (choice (completing-read
-                            (format "%s visit issue (%s): " repo-id (if P "all" "open"))
-                            (mapcar #'car issues) nil t)))
-                (unless (string-equal choice "")
-                  (message "%s" choice)
-                  ;; parse the number we selected back out
-                  (let ((topic (and (string-match "^#\\([0-9]+\\) " choice)
-                                    (string-to-number (match-string 1 choice)))))
-                    (with-demoted-errors "Warning: %S"
-                      (with-temp-buffer
-                        (forge-visit-issue (forge-get-issue repo topic))))))))))
+              (with-local-quit
+                (let*
+                    ((issues
+                      (let ((state (if P nil 'open)))
+                        (forge--topic-collection
+                         (forge--list-topics
+                          (forge--topics-spec :type 'issue :state state)
+                          repo))))
+                     (choice (completing-read
+                              (format "%s visit issue (%s): " repo-id (if P "all" "open"))
+                              (mapcar #'car issues) nil t)))
+                  (unless (string-equal choice "")
+                    (message "%s" choice)
+                    ;; parse the number we selected back out
+                    (let ((topic (and (string-match "^#\\([0-9]+\\) " choice)
+                                      (string-to-number (match-string 1 choice)))))
+                      (with-demoted-errors "Warning: %S"
+                        (with-temp-buffer
+                          (forge-visit-issue (forge-get-issue repo topic)))))))))))
       (forge--pull repo callback))))
 
 (defun gh-notify-display-state ()
