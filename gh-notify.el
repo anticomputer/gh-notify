@@ -988,8 +988,8 @@ The alist contains (repo-id . notifications) pairs."
 ;;;
 
 (defun gh-notify-ls-pullreqs-at-point (P)
-  "Navigate a list of open pull requests available for notification at point.
-Closed pull requests on prefix P."
+  "Navigate a list of active pull requests available for notification at point.
+All pull requests on prefix P."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((notification (gh-notify-current-notification)))
@@ -1003,13 +1003,14 @@ Closed pull requests on prefix P."
               (with-local-quit
                 (let*
                     ((pullreqs
-                      (let ((state (if P 'closed 'open)))
-                        (forge--topic-collection
-                         (forge--list-topics
-                          (forge--topics-spec :type 'pullreq :state state)
-                          repo))))
+                      (forge--topic-collection
+                       (forge--list-topics
+                        (if P
+                            (forge--topics-spec :type 'pullreq :active nil :state nil)
+                          (forge--topics-spec :type 'pullreq :active t))
+                        repo)))
                      (choice (completing-read
-                              (format "%s visit pull request (%s): " repo-id (if P "closed" "open"))
+                              (format "%s visit pull request (%s): " repo-id (if P "all" "active"))
                               (mapcar #'car pullreqs) nil t)))
                   (unless (string-equal choice "")
                     (message "%s" choice)
@@ -1022,8 +1023,8 @@ Closed pull requests on prefix P."
       (forge--pull repo callback))))
 
 (defun gh-notify-ls-issues-at-point (P)
-  "Navigate a list of open issues available for notification at point.
-Closed issues on prefix P."
+  "Navigate a list of active issues available for notification at point.
+All issues on prefix P."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((notification (gh-notify-current-notification)))
@@ -1037,13 +1038,14 @@ Closed issues on prefix P."
               (with-local-quit
                 (let*
                     ((issues
-                      (let ((state (if P 'closed 'open)))
-                        (forge--topic-collection
-                         (forge--list-topics
-                          (forge--topics-spec :type 'issue :state state)
-                          repo))))
+                      (forge--topic-collection
+                       (forge--list-topics
+                        (if P
+                            (forge--topics-spec :type 'issue :active nil :state nil)
+                          (forge--topics-spec :type 'issue :active t))
+                        repo)))
                      (choice (completing-read
-                              (format "%s visit issue (%s): " repo-id (if P "closed" "open"))
+                              (format "%s visit issue (%s): " repo-id (if P "all" "active"))
                               (mapcar #'car issues) nil t)))
                   (unless (string-equal choice "")
                     (message "%s" choice)
