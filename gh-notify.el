@@ -1,4 +1,6 @@
-;;; gh-notify.el --- A veneer for Magit/Forge GitHub notifications            -*- lexical-binding: t -*-
+;; -*- lexical-binding: t; -*-
+
+;;; gh-notify.el --- A veneer for Magit/Forge GitHub notifications
 
 ;; Copyright (C) 2021 bas@anti.computer
 ;;               2020 xristos@sdf.org
@@ -985,61 +987,75 @@ The alist contains (repo-id . notifications) pairs."
 ;;; Interactive
 ;;;
 
-;; modified from forge-read-issue
 (defun gh-notify-ls-pullreqs-at-point (P)
-  "Navigate a list of open pull requests available for notification at point.
-All pull request on prefix P."
+  "Navigate a list of active pull requests available for notification at point.
+All pull requests on prefix P."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((notification (gh-notify-current-notification)))
+    ;; build a closure for a pull topic callback
     (let* ((default-directory gh-notify-smokescreen-path)
            (repo-id (gh-notify-notification-repo-id notification))
            (repo (gh-notify-notification-repo notification))
-           (fmt (lambda (obj)
-                  (format "#%s %s"
-                          (oref obj number)
-                          (oref obj title))))
-           ;; list all issues on prefix, only open by default
-           (pullreqs (if P (forge--ls-pullreqs repo)
-                       (forge--ls-active-pullreqs repo)))
-           (choice (completing-read
-                    (format "%s visit pull request (%s): " repo-id (if P "all" "open"))
-                    (mapcar fmt pullreqs) nil t)))
-      (unless (string-equal choice "")
-        ;; parse the number we selected back out
-        (let ((topic (and (string-match "^#\\([0-9]+\\) " choice)
-                          (string-to-number (match-string 1 choice)))))
-          (with-demoted-errors "Warning: %S"
-            (with-temp-buffer
-              (forge-visit-pullreq (forge-get-pullreq repo topic)))))))))
+           (P P)
+           (callback
+            (lambda ()
+              (with-local-quit
+                (let*
+                    ((pullreqs
+                      (forge--topic-collection
+                       (forge--list-topics
+                        (if P
+                            (forge--topics-spec :type 'pullreq :active nil :state nil)
+                          (forge--topics-spec :type 'pullreq :active t))
+                        repo)))
+                     (choice (completing-read
+                              (format "%s visit pull request (%s): " repo-id (if P "all" "active"))
+                              (mapcar #'car pullreqs) nil t)))
+                  (unless (string-equal choice "")
+                    (message "%s" choice)
+                    ;; parse the number we selected back out
+                    (let ((topic (and (string-match "^#\\([0-9]+\\) " choice)
+                                      (string-to-number (match-string 1 choice)))))
+                      (with-demoted-errors "Warning: %S"
+                        (with-temp-buffer
+                          (forge-visit-pullreq (forge-get-pullreq repo topic)))))))))))
+      (forge--pull repo callback))))
 
 (defun gh-notify-ls-issues-at-point (P)
-  "Navigate a list of open issues available for notification at point.
+  "Navigate a list of active issues available for notification at point.
 All issues on prefix P."
   (interactive "P")
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((notification (gh-notify-current-notification)))
+    ;; build a closure for a pull topic callback
     (let* ((default-directory gh-notify-smokescreen-path)
            (repo-id (gh-notify-notification-repo-id notification))
            (repo (gh-notify-notification-repo notification))
-           (fmt (lambda (obj)
-                  (format "#%s %s"
-                          (oref obj number)
-                          (oref obj title))))
-           ;; list all issues on prefix, only open by default
-           (issues (if P (forge--ls-issues repo)
-                     (forge--ls-open-issues repo)))
-           (choice (completing-read
-                    (format "%s visit issue (%s): " repo-id (if P "all" "open"))
-                    (mapcar fmt issues) nil t)))
-      (unless (string-equal choice "")
-        (message "%s" choice)
-        ;; parse the number we selected back out
-        (let ((topic (and (string-match "^#\\([0-9]+\\) " choice)
-                          (string-to-number (match-string 1 choice)))))
-          (with-demoted-errors "Warning: %S"
-            (with-temp-buffer
-              (forge-visit-issue (forge-get-issue repo topic)))))))))
+           (P P)
+           (callback
+            (lambda ()
+              (with-local-quit
+                (let*
+                    ((issues
+                      (forge--topic-collection
+                       (forge--list-topics
+                        (if P
+                            (forge--topics-spec :type 'issue :active nil :state nil)
+                          (forge--topics-spec :type 'issue :active t))
+                        repo)))
+                     (choice (completing-read
+                              (format "%s visit issue (%s): " repo-id (if P "all" "active"))
+                              (mapcar #'car issues) nil t)))
+                  (unless (string-equal choice "")
+                    (message "%s" choice)
+                    ;; parse the number we selected back out
+                    (let ((topic (and (string-match "^#\\([0-9]+\\) " choice)
+                                      (string-to-number (match-string 1 choice)))))
+                      (with-demoted-errors "Warning: %S"
+                        (with-temp-buffer
+                          (forge-visit-issue (forge-get-issue repo topic)))))))))))
+      (forge--pull repo callback))))
 
 (defun gh-notify-display-state ()
   "Show the current state for an issue or pull request notification."
