@@ -218,9 +218,6 @@ Repos are in the form \"owner/repo\".
 
 Use this to muzzle specific repos that you want to silence across sessions.")
 
-(defvar gh-notify-smokescreen-path (expand-file-name "~/.gh-notify-smokescreen")
-  "The default path for the magit `forge-visit' smokescreen repo.")
-
 (defvar gh-notify-redraw-on-visit t
   "Automatically redraw notifications on `forge-visit'.
 
@@ -290,19 +287,20 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
     for ts = (encode-time (iso8601-parse (oref forge-notification updated)))
     for date = (format-time-string "%F" ts) ; use local time on our end for display
     for type = (oref forge-notification type)
-    for topic-obj = (pcase type
-                      ('discussion
-                       (forge-get-discussion (oref forge-notification topic)))
-                      ('issue
-                       (forge-get-issue (oref forge-notification topic)))
-                      ('pullreq
-                       (forge-get-pullreq (oref forge-notification topic))))
+    for topic = (oref forge-notification topic)
+    for topic-obj = (and topic
+                         (pcase type
+                           ('discussion
+                            (forge-get-discussion topic))
+                           ('issue
+                            (forge-get-issue topic))
+                           ('pullreq
+                            (forge-get-pullreq topic))))
     for status = (when topic-obj (oref topic-obj status))
     for number = (when topic-obj (oref topic-obj number))
     for id = (oref forge-notification id)
     for reason = (oref forge-notification reason)
     for updated = (oref forge-notification updated)
-    for topic = (oref forge-notification topic)
     for url = (oref forge-notification url)
     for title = (oref forge-notification title)
     for state = (when gh-notify-show-state
@@ -324,8 +322,7 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
              :type type
              :repo-id repo-id
              :repo repo
-             ;; unread-p changed to a topic status scheme in db version >= 11
-             ;; https://github.com/magit/forge/blob/99d319823719339e0c324ad3e9f78564865ec07a/lisp/forge-db.el#L471
+             ;; Modern Forge uses topic status scheme (unread/pending/done)
              :unread (eq status 'unread)
              :status status
              :url url
@@ -994,8 +991,7 @@ All pull requests on prefix P."
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((notification (gh-notify-current-notification)))
     ;; build a closure for a pull topic callback
-    (let* ((default-directory gh-notify-smokescreen-path)
-           (repo-id (gh-notify-notification-repo-id notification))
+    (let* ((repo-id (gh-notify-notification-repo-id notification))
            (repo (gh-notify-notification-repo notification))
            (P P)
            (callback
@@ -1018,8 +1014,8 @@ All pull requests on prefix P."
                     (let ((topic (and (string-match "^#\\([0-9]+\\) " choice)
                                       (string-to-number (match-string 1 choice)))))
                       (with-demoted-errors "Warning: %S"
-                        (with-temp-buffer
-                          (forge-visit-pullreq (forge-get-pullreq repo topic)))))))))))
+                        (when-let ((topic-obj (forge-get-pullreq repo topic)))
+                          (forge-topic-setup-buffer topic-obj))))))))))
       (forge--pull repo callback))))
 
 (defun gh-notify-ls-issues-at-point (P)
@@ -1029,8 +1025,7 @@ All issues on prefix P."
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((notification (gh-notify-current-notification)))
     ;; build a closure for a pull topic callback
-    (let* ((default-directory gh-notify-smokescreen-path)
-           (repo-id (gh-notify-notification-repo-id notification))
+    (let* ((repo-id (gh-notify-notification-repo-id notification))
            (repo (gh-notify-notification-repo notification))
            (P P)
            (callback
@@ -1053,8 +1048,8 @@ All issues on prefix P."
                     (let ((topic (and (string-match "^#\\([0-9]+\\) " choice)
                                       (string-to-number (match-string 1 choice)))))
                       (with-demoted-errors "Warning: %S"
-                        (with-temp-buffer
-                          (forge-visit-issue (forge-get-issue repo topic)))))))))))
+                        (when-let ((topic-obj (forge-get-issue repo topic)))
+                          (forge-topic-setup-buffer topic-obj))))))))))
       (forge--pull repo callback))))
 
 (defun gh-notify-display-state ()
@@ -1361,10 +1356,7 @@ If there is a region, only unmark notifications in region."
   (cl-assert (eq major-mode 'gh-notify-mode) t)
   (when-let ((current-notification (gh-notify-current-notification)))
     (let* ((repo (gh-notify-notification-repo current-notification)))
-      ;; XXX: improve me, needs to detect when we don't have a full repo locally
-      ;; XXX: which we can probably just pull from the Forge DB
       (if repo
-          ;; forge-visit no longer exists so use the original implementation here
           (let ((worktree (oref repo worktree)))
             (if (and worktree (file-directory-p worktree))
                 (magit-status-setup-buffer worktree)
@@ -1395,48 +1387,20 @@ Browse issue or PR on prefix P."
         ;; it can result in a lagging point, so take care of all the state rendering
         ;; first, and THEN trigger the buffer switch
 
-        (cl-letf ((default-directory gh-notify-smokescreen-path))
-
-          ;; XXX: this is a really ugly hack until I figure out how to cleanly make
-          ;; XXX: magit ignore errors when we don't have a local copy of the repo
-          ;; XXX: checked out in our magit paths ... we really don't need a local copy
-          ;; XXX: for interacting with issues and even performing reviews ... e.g.
-          ;; XXX: github-review will work fine with a template magit buffer from a PR
-          ;; XXX: for a non-local repo ...
-
-          ;; XXX: so we throw up a smokescreen with an empty tmp git repo, magit will
-          ;; XXX: fall back to default-directory if it can't find the actual repo ;)
-          ;; XXX: surely there's some non-ganky way to achieve this, but will have to
-          ;; XXX: dig into magit/forge guts a bit more ...
-
-          (unless (file-exists-p default-directory)
-            (make-directory default-directory)
-            (set-file-modes default-directory #o700)
-            (magit-init default-directory))
-
-          (pcase type
-            ('issue
-             (gh-notify-set-notification-status current-notification 'pending)
-             (with-demoted-errors "Warning: %S"
-               (with-temp-buffer
-                 (forge-visit-issue (forge-get-issue topic))
-                 (forge-pull-topic topic))))
-            ('pullreq
-             (gh-notify-set-notification-status current-notification 'pending)
-             (with-demoted-errors "Warning: %S"
-               (with-temp-buffer
-                 (forge-visit-pullreq (forge-get-pullreq topic))
-                 (forge-pull-topic topic))))
-            ('discussion
-             (gh-notify-set-notification-status current-notification 'pending)
-             (with-demoted-errors "Warning: %S"
-               (with-temp-buffer
-                 (forge-visit-discussion (forge-get-discussion topic))
-                 (forge-pull-topic topic))))
-            ('commit
-             (message "Commit not handled yet!"))
-            (_
-             (message "Handling something else (%s) %s\n" type title))))))))
+        (pcase type
+          ((or 'issue 'pullreq 'discussion)
+           (gh-notify-set-notification-status current-notification 'pending)
+           (with-demoted-errors "Warning visiting topic: %S"
+             (if-let ((topic-obj (gh-notify-notification-topic-obj current-notification)))
+                 (progn
+                   (forge-topic-setup-buffer topic-obj)
+                   ;; Fetch latest topic data
+                   (forge--pull-topic repo topic-obj))
+               (message "Topic %s not in database, try running forge-pull" number))))
+          ('commit
+           (message "Commit notifications not yet supported"))
+          (_
+           (message "Unknown notification type: %s - %s" type title)))))))
 
 (defun gh-notify-browse-notification (repo-id type number)
   "Browse to a TOPIC of TYPE on GitHub REPO-ID."
