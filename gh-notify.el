@@ -196,8 +196,11 @@ to use `gh-notify-display-state' via a keybinding instead.")
   "Show notification titles when equal to :title, URLs otherwise.
 This can be toggled by `gh-notify-toggle-url-view'.")
 
-(defvar gh-notify-reason-limit :all
-  "Default display limit.")
+(defvar gh-notify-reason-limit '(:all)
+  "Default display limit.
+Can be a list of reason keywords that will be combined with OR logic.
+Supported reasons: :assign, :mention, :team_mention, :subscribed,
+:author, :comment, :review-requested, :mark, :unread, :all.")
 
 (defvar gh-notify-default-repo-limit '()
   "List of default repo limits.
@@ -501,7 +504,10 @@ NOTIFICATIONS must be an alist as returned from `gh-notify-get-notifications'."
        (when gh-notify--unread-limit
          (format "%s " gh-notify--unread-limit))
        (when gh-notify--type-limit (format "type: %s " gh-notify--type-limit))
-       (format "reason: %s " gh-notify-reason-limit)
+       (format "reason: %s "
+               (mapconcat (lambda (r) (substring (symbol-name r) 1))
+                          gh-notify-reason-limit
+                          ","))
        ;; if it's active, you already know which repos are in the filter, if not you don't care
        (when gh-notify--repo-limit ":repo ")
        (when gh-notify-show-timing
@@ -685,25 +691,25 @@ Type \\[gh-notify-limit-issue] to limit to issue notifications.
 
 Type \\[gh-notify-limit-pr] to limit to pull request notifications.
 
-Type \\[gh-notify-limit-assign] to limit to assign notifications.
+Type \\[gh-notify-limit-assign] to toggle assign notifications.
 
-Type \\[gh-notify-limit-author] to limit to author notifications.
+Type \\[gh-notify-limit-author] to toggle author notifications.
 
-Type \\[gh-notify-limit-mention] to limit to mention notifications.
+Type \\[gh-notify-limit-mention] to toggle mention notifications.
 
-Type \\[gh-notify-limit-team-mention] to limit to team-mention notifications.
+Type \\[gh-notify-limit-team-mention] to toggle team-mention notifications.
 
-Type \\[gh-notify-limit-subscribed] to limit to subscribed notifications.
+Type \\[gh-notify-limit-subscribed] to toggle subscribed notifications.
 
-Type \\[gh-notify-limit-comment] to limit to comment notifications.
+Type \\[gh-notify-limit-comment] to toggle comment notifications.
 
-Type \\[gh-notify-limit-review-requested] to limit to review-requested notifications.
+Type \\[gh-notify-limit-review-requested] to toggle review-requested notifications.
 
-Type \\[gh-notify-limit-none] to remove any active reason limit.
+Type \\[gh-notify-limit-marked] to toggle marked notifications.
 
-Type \\[gh-notify-limit-marked] to only show marked notifications.
+All reason filters can be stacked - multiple reasons can be active at once.
 
-Type \\[gh-notify-limit-none] to remove the current limit and show all notifications.
+Type \\[gh-notify-limit-none] to remove all reason filters and show all notifications.
 
 Marking:
 
@@ -843,6 +849,9 @@ It must not span more than one line but it may contain text properties."
   "Limits NOTIFICATION by status.
 Limiting operation depends on `gh-notify-reason-limit', `gh-notify-type-limit'
 and `gh-notify--repo-limit'."
+  ;; Ensure backward compatibility: convert old single-value format to list
+  (unless (listp gh-notify-reason-limit)
+    (setq-local gh-notify-reason-limit (list gh-notify-reason-limit)))
   (let ((repo-id (gh-notify-notification-repo-id notification)))
     ;; 3 pass filter: repo -> type -> reason
     (when
@@ -860,17 +869,26 @@ and `gh-notify--repo-limit'."
        (or (eq (gh-notify-notification-type notification) gh-notify--type-limit)
            (not gh-notify--type-limit))
        ;; reason filters (layer 3 filter)
-       (cl-case gh-notify-reason-limit
-         (:all t)
-         (:mark (gh-notify-notification-is-marked notification))
-         (:unread (gh-notify-notification-unread notification))
-         (:assign (eq (gh-notify-notification-reason notification) 'assign))
-         (:mention (eq (gh-notify-notification-reason notification) 'mention))
-         (:team_mention (eq (gh-notify-notification-reason notification) 'team_mention))
-         (:subscribed (eq (gh-notify-notification-reason notification) 'subscribed))
-         (:author (eq (gh-notify-notification-reason notification) 'author))
-         (:review-requested (eq (gh-notify-notification-reason notification) 'review_requested))
-         (:comment (eq (gh-notify-notification-reason notification) 'comment)))))))
+       ;; Check if notification matches any of the active reason filters
+       (or (member :all gh-notify-reason-limit)
+           (and (member :mark gh-notify-reason-limit)
+                (gh-notify-notification-is-marked notification))
+           (and (member :unread gh-notify-reason-limit)
+                (gh-notify-notification-unread notification))
+           (and (member :assign gh-notify-reason-limit)
+                (eq (gh-notify-notification-reason notification) 'assign))
+           (and (member :mention gh-notify-reason-limit)
+                (eq (gh-notify-notification-reason notification) 'mention))
+           (and (member :team_mention gh-notify-reason-limit)
+                (eq (gh-notify-notification-reason notification) 'team_mention))
+           (and (member :subscribed gh-notify-reason-limit)
+                (eq (gh-notify-notification-reason notification) 'subscribed))
+           (and (member :author gh-notify-reason-limit)
+                (eq (gh-notify-notification-reason notification) 'author))
+           (and (member :review-requested gh-notify-reason-limit)
+                (eq (gh-notify-notification-reason notification) 'review_requested))
+           (and (member :comment gh-notify-reason-limit)
+                (eq (gh-notify-notification-reason notification) 'comment)))))))
 
 (defun gh-notify-filter-notification (notification)
   "Filters NOTIFICATION using a case-insensitive match on either URL or title."
@@ -1088,10 +1106,21 @@ All issues on prefix P."
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-marked ()
-  "Only show marked notifications."
+  "Toggle showing marked notifications.
+When toggled on, removes :all from the filter list if present.
+Multiple reason filters can be active at once."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (setq-local gh-notify-reason-limit :mark)
+  (if (member :mark gh-notify-reason-limit)
+      ;; Remove :mark from the list
+      (progn
+        (setq-local gh-notify-reason-limit (remove :mark gh-notify-reason-limit))
+        ;; If list is empty, add :all back
+        (when (null gh-notify-reason-limit)
+          (setq-local gh-notify-reason-limit '(:all))))
+    ;; Add :mark and remove :all
+    (setq-local gh-notify-reason-limit
+                (cons :mark (remove :all gh-notify-reason-limit))))
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-type-none ()
@@ -1128,52 +1157,129 @@ All issues on prefix P."
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-assign ()
-  "Only show notifications with reason: assign."
+  "Toggle showing notifications with reason: assign.
+When toggled on, removes :all from the filter list if present.
+Multiple reason filters can be active at once."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (setq-local gh-notify-reason-limit :assign)
+  (if (member :assign gh-notify-reason-limit)
+      ;; Remove :assign from the list
+      (progn
+        (setq-local gh-notify-reason-limit (remove :assign gh-notify-reason-limit))
+        ;; If list is empty, add :all back
+        (when (null gh-notify-reason-limit)
+          (setq-local gh-notify-reason-limit '(:all))))
+    ;; Add :assign and remove :all
+    (setq-local gh-notify-reason-limit
+                (cons :assign (remove :all gh-notify-reason-limit))))
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-author ()
-  "Only show notifications with reason: author."
+  "Toggle showing notifications with reason: author.
+When toggled on, removes :all from the filter list if present.
+Multiple reason filters can be active at once."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (setq-local gh-notify-reason-limit :author)
+  (if (member :author gh-notify-reason-limit)
+      ;; Remove :author from the list
+      (progn
+        (setq-local gh-notify-reason-limit (remove :author gh-notify-reason-limit))
+        ;; If list is empty, add :all back
+        (when (null gh-notify-reason-limit)
+          (setq-local gh-notify-reason-limit '(:all))))
+    ;; Add :author and remove :all
+    (setq-local gh-notify-reason-limit
+                (cons :author (remove :all gh-notify-reason-limit))))
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-mention ()
-  "Only show notifications with reason: mention."
+  "Toggle showing notifications with reason: mention.
+When toggled on, removes :all from the filter list if present.
+Multiple reason filters can be active at once."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (setq-local gh-notify-reason-limit :mention)
+  (if (member :mention gh-notify-reason-limit)
+      ;; Remove :mention from the list
+      (progn
+        (setq-local gh-notify-reason-limit (remove :mention gh-notify-reason-limit))
+        ;; If list is empty, add :all back
+        (when (null gh-notify-reason-limit)
+          (setq-local gh-notify-reason-limit '(:all))))
+    ;; Add :mention and remove :all
+    (setq-local gh-notify-reason-limit
+                (cons :mention (remove :all gh-notify-reason-limit))))
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-team-mention ()
-  "Only show notifications with reason: team_mentioned."
+  "Toggle showing notifications with reason: team_mention.
+When toggled on, removes :all from the filter list if present.
+Multiple reason filters can be active at once."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (setq-local gh-notify-reason-limit :team_mention)
+  (if (member :team_mention gh-notify-reason-limit)
+      ;; Remove :team_mention from the list
+      (progn
+        (setq-local gh-notify-reason-limit (remove :team_mention gh-notify-reason-limit))
+        ;; If list is empty, add :all back
+        (when (null gh-notify-reason-limit)
+          (setq-local gh-notify-reason-limit '(:all))))
+    ;; Add :team_mention and remove :all
+    (setq-local gh-notify-reason-limit
+                (cons :team_mention (remove :all gh-notify-reason-limit))))
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-subscribed ()
-  "Only show notifications with reason: subscribed."
+  "Toggle showing notifications with reason: subscribed.
+When toggled on, removes :all from the filter list if present.
+Multiple reason filters can be active at once."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (setq-local gh-notify-reason-limit :subscribed)
+  (if (member :subscribed gh-notify-reason-limit)
+      ;; Remove :subscribed from the list
+      (progn
+        (setq-local gh-notify-reason-limit (remove :subscribed gh-notify-reason-limit))
+        ;; If list is empty, add :all back
+        (when (null gh-notify-reason-limit)
+          (setq-local gh-notify-reason-limit '(:all))))
+    ;; Add :subscribed and remove :all
+    (setq-local gh-notify-reason-limit
+                (cons :subscribed (remove :all gh-notify-reason-limit))))
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-comment ()
-  "Only show notifications with reason: comment."
+  "Toggle showing notifications with reason: comment.
+When toggled on, removes :all from the filter list if present.
+Multiple reason filters can be active at once."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (setq-local gh-notify-reason-limit :comment)
+  (if (member :comment gh-notify-reason-limit)
+      ;; Remove :comment from the list
+      (progn
+        (setq-local gh-notify-reason-limit (remove :comment gh-notify-reason-limit))
+        ;; If list is empty, add :all back
+        (when (null gh-notify-reason-limit)
+          (setq-local gh-notify-reason-limit '(:all))))
+    ;; Add :comment and remove :all
+    (setq-local gh-notify-reason-limit
+                (cons :comment (remove :all gh-notify-reason-limit))))
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-review-requested ()
-  "Only show notifications with reason: review_requested."
+  "Toggle showing notifications with reason: review_requested.
+When toggled on, removes :all from the filter list if present.
+Multiple reason filters can be active at once."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (setq-local gh-notify-reason-limit :review-requested)
+  (if (member :review-requested gh-notify-reason-limit)
+      ;; Remove :review-requested from the list
+      (progn
+        (setq-local gh-notify-reason-limit (remove :review-requested gh-notify-reason-limit))
+        ;; If list is empty, add :all back
+        (when (null gh-notify-reason-limit)
+          (setq-local gh-notify-reason-limit '(:all))))
+    ;; Add :review-requested and remove :all
+    (setq-local gh-notify-reason-limit
+                (cons :review-requested (remove :all gh-notify-reason-limit))))
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-repo (P)
@@ -1193,11 +1299,12 @@ All issues on prefix P."
   (gh-notify--filter-notifications))
 
 (defun gh-notify-limit-none ()
-  "Remove current limit and show all notifications."
+  "Remove all reason filters and show all notifications."
   (interactive)
   (cl-assert (eq major-mode 'gh-notify-mode) t)
-  (unless (eq gh-notify-reason-limit :all)
-    (setq-local gh-notify-reason-limit :all)
+  (unless (and (listp gh-notify-reason-limit)
+               (equal gh-notify-reason-limit '(:all)))
+    (setq-local gh-notify-reason-limit '(:all))
     (gh-notify--filter-notifications)))
 
 (defun gh-notify-limit-repo-none ()
