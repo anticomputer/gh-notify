@@ -227,6 +227,20 @@ Use this to muzzle specific repos that you want to silence across sessions.")
 If you prefer to manually refresh notification display state after visits, set
 this to nil.")
 
+(defcustom gh-notify-remote-mark-read t
+  "Mark notifications as read on GitHub when they leave the unread state.
+
+When non-nil, transitioning a notification to a read state (`pending' or
+`done'), e.g. by visiting it or explicitly marking it done, also marks the
+corresponding notification thread as read on GitHub via the REST endpoint
+\"PATCH /notifications/threads/{thread_id}\".
+
+Set to nil to keep read state local to Magit/Forge only.  Note that there is no
+stable GitHub endpoint to mark a thread unread again, so setting a notification
+back to `unread' is always local-only."
+  :type 'boolean
+  :group 'gh-notify)
+
 (cl-defstruct (gh-notify-notification
                (:constructor gh-notify-notification-create)
                (:copier nil))
@@ -988,10 +1002,39 @@ The alist contains (repo-id . notifications) pairs."
        (let ((pullreq (forge-get-pullreq topic)))
          (oref pullreq state))))))
 
+(defun gh-notify--remote-mark-thread-read (notification)
+  "Mark NOTIFICATION as read on GitHub.
+
+Issues an asynchronous \"PATCH /notifications/threads/{thread_id}\"
+request using the notification thread id stored on the underlying
+Forge object.  This is a best-effort, fire-and-forget operation:
+failures are reported as a warning but do not interfere with local
+notification handling.  No-op for non-GitHub repos."
+  (when-let* ((forge-obj (gh-notify-notification-forge-obj notification))
+              (thread-id (oref forge-obj thread-id))
+              (repo (gh-notify-notification-repo notification)))
+    (when (forge-github-repository-p repo)
+      (with-demoted-errors "gh-notify: error marking notification read: %S"
+        (forge--rest repo "PATCH"
+          (format "/notifications/threads/%s" thread-id)
+          nil
+          :noerror t
+          :callback (lambda (&rest _) nil)
+          :errorback (lambda (err &rest _)
+                       (message "gh-notify: failed to mark notification read on GitHub: %S" err)))))))
+
 (defun gh-notify-set-notification-status (notification value)
   "Set NOTIFICATION status as VALUE"
   (when-let (topic-obj (gh-notify-notification-topic-obj notification))
     (when (oref topic-obj status)
+      ;; Sync read state to GitHub before mutating local state, but only when
+      ;; actually transitioning out of `unread' into a read state, to avoid
+      ;; redundant API calls.  There is no stable endpoint to mark unread, so
+      ;; setting `unread' is local-only.
+      (when (and gh-notify-remote-mark-read
+                 (memq value '(pending done))
+                 (eq (oref topic-obj status) 'unread))
+        (gh-notify--remote-mark-thread-read notification))
       (oset topic-obj status value)
       ;; XXX: only oset the object now instead of replacing it in db
       ;; XXX: https://github.com/anticomputer/gh-notify/issues/19
